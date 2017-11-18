@@ -12,6 +12,9 @@ namespace ZendTest\Router;
 use PHPUnit\Framework\TestCase;
 use Zend\Router\PriorityList;
 
+/**
+ * @covers \Zend\Router\PriorityList
+ */
 class PriorityListTest extends TestCase
 {
     /**

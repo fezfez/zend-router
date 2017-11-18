@@ -19,6 +19,9 @@ use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\ServiceManager;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Chain
+ */
 class ChainTest extends TestCase
 {
     public static function getRoute()

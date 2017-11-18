@@ -26,6 +26,9 @@ use Zend\Stdlib\Parameters;
 use Zend\Stdlib\Request as BaseRequest;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Part
+ */
 class PartTest extends TestCase
 {
     public static function getRoutePlugins()

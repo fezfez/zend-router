@@ -16,6 +16,9 @@ use Zend\Router\RoutePluginManager;
 use Zend\Router\RoutePluginManagerFactory;
 use Zend\ServiceManager\ServiceLocatorInterface;
 
+/**
+ * @covers \Zend\Router\RoutePluginManagerFactory
+ */
 class RoutePluginManagerFactoryTest extends TestCase
 {
     public function setUp()

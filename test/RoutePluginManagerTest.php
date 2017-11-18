@@ -14,6 +14,9 @@ use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\Exception\ServiceNotFoundException;
 use Zend\ServiceManager\ServiceManager;
 
+/**
+ * @covers \Zend\Router\RoutePluginManager
+ */
 class RoutePluginManagerTest extends TestCase
 {
     public function testLoadNonExistentRoute()

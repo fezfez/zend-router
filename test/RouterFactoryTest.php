@@ -17,6 +17,9 @@ use Zend\Router\RouterFactory;
 use Zend\ServiceManager\Config;
 use Zend\ServiceManager\ServiceManager;
 
+/**
+ * @covers \Zend\Router\RouterFactory
+ */
 class RouterFactoryTest extends TestCase
 {
     public function setUp()

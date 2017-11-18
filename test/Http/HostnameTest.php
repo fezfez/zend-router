@@ -19,6 +19,9 @@ use Zend\Stdlib\Request as BaseRequest;
 use Zend\Uri\Http as HttpUri;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Hostname
+ */
 class HostnameTest extends TestCase
 {
     public static function routeProvider()

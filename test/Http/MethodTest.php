@@ -16,6 +16,9 @@ use Zend\Router\Http\RouteMatch;
 use Zend\Stdlib\Request as BaseRequest;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Method
+ */
 class MethodTest extends TestCase
 {
     public static function routeProvider()

@@ -17,6 +17,9 @@ use Zend\Stdlib\Request as BaseRequest;
 use Zend\Uri\Http as HttpUri;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Scheme
+ */
 class SchemeTest extends TestCase
 {
     public function testMatching()

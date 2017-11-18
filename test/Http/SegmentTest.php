@@ -21,6 +21,9 @@ use Zend\Router\Http\Segment;
 use Zend\Stdlib\Request as BaseRequest;
 use ZendTest\Router\FactoryTester;
 
+/**
+ * @covers \Zend\Router\Route\Segment
+ */
 class SegmentTest extends TestCase
 {
     public function routeProvider()
