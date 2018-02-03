@@ -107,10 +107,6 @@ class TreeRouteStack extends SimpleRouteStack
                 'Scheme'   => Scheme::class,
                 'segment'  => Segment::class,
                 'Segment'  => Segment::class,
-                'wildcard' => Wildcard::class,
-                'Wildcard' => Wildcard::class,
-                'wildCard' => Wildcard::class,
-                'WildCard' => Wildcard::class,
             ],
             'factories' => [
                 Chain::class    => RouteInvokableFactory::class,
@@ -121,7 +117,6 @@ class TreeRouteStack extends SimpleRouteStack
                 Regex::class    => RouteInvokableFactory::class,
                 Scheme::class   => RouteInvokableFactory::class,
                 Segment::class  => RouteInvokableFactory::class,
-                Wildcard::class => RouteInvokableFactory::class,
 
                 // v2 normalized names
 
@@ -133,7 +128,6 @@ class TreeRouteStack extends SimpleRouteStack
                 'zendmvcrouterhttpregex'    => RouteInvokableFactory::class,
                 'zendmvcrouterhttpscheme'   => RouteInvokableFactory::class,
                 'zendmvcrouterhttpsegment'  => RouteInvokableFactory::class,
-                'zendmvcrouterhttpwildcard' => RouteInvokableFactory::class,
             ],
         ]))->configureServiceManager($this->routePluginManager);
     }
