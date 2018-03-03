@@ -12,6 +12,7 @@ namespace Zend\Router\Http;
 use Zend\I18n\Translator\TranslatorInterface as Translator;
 use Zend\I18n\Translator\TranslatorAwareInterface;
 use Zend\Router\Exception;
+use Zend\Router\TreeRouteStack;
 use Zend\Stdlib\RequestInterface as Request;
 
 /**

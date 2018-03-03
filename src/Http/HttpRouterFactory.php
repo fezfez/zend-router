@@ -12,6 +12,7 @@ namespace Zend\Router\Http;
 use Interop\Container\ContainerInterface;
 use Zend\Router\RouterConfigTrait;
 use Zend\Router\RouteStackInterface;
+use Zend\Router\TreeRouteStack;
 use Zend\ServiceManager\FactoryInterface;
 use Zend\ServiceManager\ServiceLocatorInterface;
 

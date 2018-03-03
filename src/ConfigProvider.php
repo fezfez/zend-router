@@ -41,13 +41,13 @@ class ConfigProvider
     {
         return [
             'aliases' => [
-                'HttpRouter' => Http\TreeRouteStack::class,
+                'HttpRouter' => TreeRouteStack::class,
                 'router' => RouteStackInterface::class,
                 'Router' => RouteStackInterface::class,
                 'RoutePluginManager' => RoutePluginManager::class,
             ],
             'factories' => [
-                Http\TreeRouteStack::class => Http\HttpRouterFactory::class,
+                TreeRouteStack::class => Http\HttpRouterFactory::class,
                 RoutePluginManager::class => RoutePluginManagerFactory::class,
                 RouteStackInterface::class => RouterFactory::class,
             ],

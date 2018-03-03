@@ -14,6 +14,7 @@ use Traversable;
 use Zend\Router\Exception;
 use Zend\Router\PriorityList;
 use Zend\Router\RoutePluginManager;
+use Zend\Router\TreeRouteStack;
 use Zend\Stdlib\ArrayUtils;
 use Zend\Stdlib\RequestInterface as Request;
 
