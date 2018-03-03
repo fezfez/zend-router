@@ -9,7 +9,8 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
-use Zend\Stdlib\RequestInterface as Request;
+use Psr\Http\Message\UriInterface;
+use Psr\Http\Message\ServerRequestInterface as Request;
 
 /**
  * RouteInterface interface.
@@ -17,34 +18,12 @@ use Zend\Stdlib\RequestInterface as Request;
 interface RouteInterface
 {
     /**
-     * Priority used for route stacks.
-     *
-     * @var int
-     * public $priority;
-     */
-
-    /**
-     * Create a new route with given options.
-     *
-     * @param  array|\Traversable $options
-     * @return void
-     */
-    public static function factory($options = []);
-
-    /**
      * Match a given request.
-     *
-     * @param  Request $request
-     * @return RouteMatch|null
      */
-    public function match(Request $request);
+    public function match(Request $request, int $pathOffset = 0, array $options = []) : RouteResult;
 
     /**
      * Assemble the route.
-     *
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
      */
-    public function assemble(array $params = [], array $options = []);
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface;
 }

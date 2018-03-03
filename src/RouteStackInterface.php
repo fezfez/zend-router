@@ -13,35 +13,36 @@ interface RouteStackInterface extends RouteInterface
 {
     /**
      * Add a route to the stack.
-     *
-     * @param  string  $name
-     * @param  mixed   $route
-     * @param  int $priority
-     * @return RouteStackInterface
      */
-    public function addRoute($name, $route, $priority = null);
+    public function addRoute(string $name, RouteInterface $route, int $priority = null) : void;
 
     /**
      * Add multiple routes to the stack.
-     *
-     * @param  array|\Traversable $routes
-     * @return RouteStackInterface
      */
-    public function addRoutes($routes);
+    public function addRoutes(iterable $routes) : void;
 
     /**
      * Remove a route from the stack.
-     *
-     * @param  string $name
-     * @return RouteStackInterface
      */
-    public function removeRoute($name);
+    public function removeRoute(string $name) : void;
 
     /**
      * Remove all routes from the stack and set new ones.
-     *
-     * @param  array|\Traversable $routes
-     * @return RouteStackInterface
      */
-    public function setRoutes($routes);
+    public function setRoutes(iterable $routes) : void;
+
+    /**
+     * Get the added routes
+     */
+    public function getRoutes() : array;
+
+    /**
+     * Check if a route with a specific name exists
+     */
+    public function hasRoute(string $name) : bool;
+
+    /**
+     * Get a route by name
+     */
+    public function getRoute(string $name) : ?RouteInterface;
 }
