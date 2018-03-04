@@ -11,7 +11,7 @@ namespace ZendTest\Router;
 
 use Interop\Container\ContainerInterface;
 use PHPUnit\Framework\TestCase;
-use Zend\Router\Http\HttpRouterFactory;
+use Zend\Router\Route\HttpRouterFactory;
 use Zend\Router\RoutePluginManager;
 use Zend\Router\RouterFactory;
 use Zend\ServiceManager\Config;

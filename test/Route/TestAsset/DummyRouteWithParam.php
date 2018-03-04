@@ -7,9 +7,9 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http\TestAsset;
+namespace ZendTest\Router\Route\TestAsset;
 
-use Zend\Router\Http\RouteMatch;
+use Zend\Router\Route\RouteMatch;
 use Zend\Stdlib\RequestInterface;
 
 /**

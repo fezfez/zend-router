@@ -7,14 +7,14 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
 use Zend\Http\Request;
 use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
-use Zend\Router\Http\Hostname;
-use Zend\Router\Http\RouteMatch;
+use Zend\Router\Route\Hostname;
+use Zend\Router\Route\RouteMatch;
 use Zend\Stdlib\Request as BaseRequest;
 use Zend\Uri\Http as HttpUri;
 use ZendTest\Router\FactoryTester;

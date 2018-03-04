@@ -7,18 +7,18 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
 use ArrayObject;
 use PHPUnit\Framework\TestCase;
 use Zend\Http\Request;
 use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
-use Zend\Router\Http\Literal;
-use Zend\Router\Http\Part;
-use Zend\Router\Http\RouteMatch;
-use Zend\Router\Http\Segment;
-use Zend\Router\Http\Wildcard;
+use Zend\Router\Route\Literal;
+use Zend\Router\Route\Part;
+use Zend\Router\Route\RouteMatch;
+use Zend\Router\Route\Segment;
+use Zend\Router\Route\Wildcard;
 use Zend\Router\RouteInvokableFactory;
 use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\ServiceManager;
@@ -373,7 +373,7 @@ class PartTest extends TestCase
                 'route_plugins' => 'Missing "route_plugins" in options array'
             ],
             [
-                'route'         => new \Zend\Router\Http\Literal('/foo'),
+                'route'         => new Literal('/foo'),
                 'route_plugins' => self::getRoutePlugins(),
             ]
         );

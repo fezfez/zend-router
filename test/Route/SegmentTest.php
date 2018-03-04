@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
 use Zend\Http\Request;
@@ -16,8 +16,8 @@ use Zend\I18n\Translator\TextDomain;
 use Zend\I18n\Translator\Translator;
 use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
-use Zend\Router\Http\RouteMatch;
-use Zend\Router\Http\Segment;
+use Zend\Router\Route\RouteMatch;
+use Zend\Router\Route\Segment;
 use Zend\Stdlib\Request as BaseRequest;
 use ZendTest\Router\FactoryTester;
 

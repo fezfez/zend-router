@@ -7,9 +7,9 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
-use Zend\Router\Http\HttpRouterFactory;
+use Zend\Router\Route\HttpRouterFactory;
 use Zend\Router\RoutePluginManager;
 use ZendTest\Router\RouterFactoryTest as TestCase;
 

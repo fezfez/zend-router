@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-namespace Zend\Router\Http;
+namespace Zend\Router\Route;
 
 use Interop\Container\ContainerInterface;
 use Zend\Router\RouterConfigTrait;

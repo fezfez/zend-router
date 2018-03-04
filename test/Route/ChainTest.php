@@ -7,14 +7,14 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
 use Zend\Http\Request;
-use Zend\Router\Http\Chain;
-use Zend\Router\Http\RouteMatch;
-use Zend\Router\Http\Segment;
-use Zend\Router\Http\Wildcard;
+use Zend\Router\Route\Chain;
+use Zend\Router\Route\RouteMatch;
+use Zend\Router\Route\Segment;
+use Zend\Router\Route\Wildcard;
 use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\ServiceManager;
 use ZendTest\Router\FactoryTester;

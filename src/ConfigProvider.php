@@ -47,7 +47,7 @@ class ConfigProvider
                 'RoutePluginManager' => RoutePluginManager::class,
             ],
             'factories' => [
-                TreeRouteStack::class => Http\HttpRouterFactory::class,
+                TreeRouteStack::class => Route\HttpRouterFactory::class,
                 RoutePluginManager::class => RoutePluginManagerFactory::class,
                 RouteStackInterface::class => RouterFactory::class,
             ],

@@ -7,12 +7,12 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router\Http;
+namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
 use Zend\Http\Request;
-use Zend\Router\Http\Literal;
-use Zend\Router\Http\RouteMatch;
+use Zend\Router\Route\Literal;
+use Zend\Router\Route\RouteMatch;
 use Zend\Stdlib\Request as BaseRequest;
 use ZendTest\Router\FactoryTester;
 
