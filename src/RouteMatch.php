@@ -9,8 +9,14 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
+use Zend\Router\Exception\RuntimeException;
+
+use function array_key_exists;
+
 /**
  * RouteInterface match.
+ *
+ * @deprecated
  */
 class RouteMatch
 {
@@ -30,19 +36,28 @@ class RouteMatch
 
     /**
      * Create a RouteMatch with given parameters.
-     *
-     * @param array $params
      */
     public function __construct(array $params)
     {
         $this->params = $params;
     }
 
+    public static function fromRouteResult(RouteResult $result) : self
+    {
+        if (! $result->isSuccess()) {
+            throw new RuntimeException('Route match cannot be created from failure route result');
+        }
+        $match = new static($result->getMatchedParams());
+        $match->setMatchedRouteName($result->getMatchedRouteName());
+
+        return $match;
+    }
+
     /**
      * Set name of matched route.
      *
-     * @param  string $name
-     * @return RouteMatch
+     * @param string $name
+     * @return $this
      */
     public function setMatchedRouteName($name)
     {
@@ -63,9 +78,9 @@ class RouteMatch
     /**
      * Set a parameter.
      *
-     * @param  string $name
-     * @param  mixed  $value
-     * @return RouteMatch
+     * @param string $name
+     * @param mixed $value
+     * @return $this
      */
     public function setParam($name, $value)
     {
@@ -86,8 +101,8 @@ class RouteMatch
     /**
      * Get a specific parameter.
      *
-     * @param  string $name
-     * @param  mixed  $default
+     * @param string $name
+     * @param null|mixed $default
      * @return mixed
      */
     public function getParam($name, $default = null)

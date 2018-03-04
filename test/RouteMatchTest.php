@@ -10,8 +10,13 @@ declare(strict_types=1);
 namespace ZendTest\Router;
 
 use PHPUnit\Framework\TestCase;
+use Zend\Router\Exception\RuntimeException;
 use Zend\Router\RouteMatch;
+use Zend\Router\RouteResult;
 
+/**
+ * @covers \Zend\Router\RouteMatch
+ */
 class RouteMatchTest extends TestCase
 {
     public function testParamsAreStored()
@@ -56,5 +61,21 @@ class RouteMatchTest extends TestCase
         $match = new RouteMatch([]);
 
         $this->assertEquals('bar', $match->getParam('foo', 'bar'));
+    }
+
+    public function testCreateFromRouteResult()
+    {
+        $routeResult = RouteResult::fromRouteMatch(['foo' => 'bar'], 'baz');
+        $match = RouteMatch::fromRouteResult($routeResult);
+        $this->assertEquals('bar', $match->getParam('foo'));
+        $this->assertEquals('baz', $match->getMatchedRouteName());
+    }
+
+    public function testCantCreateFromFailureRouteResult()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Route match cannot be created from failure route result');
+        $routeResult = RouteResult::fromRouteFailure();
+        RouteMatch::fromRouteResult($routeResult);
     }
 }
