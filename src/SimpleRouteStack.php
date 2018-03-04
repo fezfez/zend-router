@@ -9,10 +9,14 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
-use Traversable;
-use Zend\ServiceManager\ServiceManager;
-use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\Exception\RuntimeException;
+
+use function array_merge;
+use function array_reduce;
+use function sprintf;
 
 /**
  * Simple route stack implementation.
@@ -27,13 +31,6 @@ class SimpleRouteStack implements RouteStackInterface
     protected $routes;
 
     /**
-     * Route plugin manager
-     *
-     * @var RoutePluginManager
-     */
-    protected $routePluginManager;
-
-    /**
      * Default parameters.
      *
      * @var array
@@ -42,302 +39,114 @@ class SimpleRouteStack implements RouteStackInterface
 
     /**
      * Create a new simple route stack.
-     *
-     * @param RoutePluginManager $routePluginManager
      */
-    public function __construct(RoutePluginManager $routePluginManager = null)
+    public function __construct()
     {
         $this->routes = new PriorityList();
-
-        if (null === $routePluginManager) {
-            $routePluginManager = new RoutePluginManager(new ServiceManager());
-        }
-
-        $this->routePluginManager = $routePluginManager;
-
-        $this->init();
     }
 
-    /**
-     * factory(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  array|Traversable $options
-     * @return SimpleRouteStack
-     * @throws Exception\InvalidArgumentException
-     */
-    public static function factory($options = [])
+    public function addRoutes(iterable $routes) : void
     {
-        if ($options instanceof Traversable) {
-            $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
-        }
-
-        $routePluginManager = null;
-        if (isset($options['route_plugins'])) {
-            $routePluginManager = $options['route_plugins'];
-        }
-
-        $instance = new static($routePluginManager);
-
-        if (isset($options['routes'])) {
-            $instance->addRoutes($options['routes']);
-        }
-
-        if (isset($options['default_params'])) {
-            $instance->setDefaultParams($options['default_params']);
-        }
-
-        return $instance;
-    }
-
-    /**
-     * Init method for extending classes.
-     *
-     * @return void
-     */
-    protected function init()
-    {
-    }
-
-    /**
-     * Set the route plugin manager.
-     *
-     * @param  RoutePluginManager $routePlugins
-     * @return SimpleRouteStack
-     */
-    public function setRoutePluginManager(RoutePluginManager $routePlugins)
-    {
-        $this->routePluginManager = $routePlugins;
-        return $this;
-    }
-
-    /**
-     * Get the route plugin manager.
-     *
-     * @return RoutePluginManager
-     */
-    public function getRoutePluginManager()
-    {
-        return $this->routePluginManager;
-    }
-
-    /**
-     * addRoutes(): defined by RouteStackInterface interface.
-     *
-     * @see    RouteStackInterface::addRoutes()
-     * @param  array|Traversable $routes
-     * @return SimpleRouteStack
-     * @throws Exception\InvalidArgumentException
-     */
-    public function addRoutes($routes)
-    {
-        if (! is_array($routes) && ! $routes instanceof Traversable) {
-            throw new Exception\InvalidArgumentException('addRoutes expects an array or Traversable set of routes');
-        }
-
         foreach ($routes as $name => $route) {
             $this->addRoute($name, $route);
         }
-
-        return $this;
     }
 
-    /**
-     * addRoute(): defined by RouteStackInterface interface.
-     *
-     * @see    RouteStackInterface::addRoute()
-     * @param  string  $name
-     * @param  mixed   $route
-     * @param  int $priority
-     * @return SimpleRouteStack
-     */
-    public function addRoute($name, $route, $priority = null)
+    public function addRoute(string $name, RouteInterface $route, int $priority = null) : void
     {
-        if (! $route instanceof RouteInterface) {
-            $route = $this->routeFromArray($route);
-        }
-
         if ($priority === null && isset($route->priority)) {
             $priority = $route->priority;
         }
 
         $this->routes->insert($name, $route, $priority);
-
-        return $this;
     }
 
-    /**
-     * removeRoute(): defined by RouteStackInterface interface.
-     *
-     * @see    RouteStackInterface::removeRoute()
-     * @param  string $name
-     * @return SimpleRouteStack
-     */
-    public function removeRoute($name)
+    public function removeRoute(string $name) : void
     {
         $this->routes->remove($name);
-        return $this;
     }
 
-    /**
-     * setRoutes(): defined by RouteStackInterface interface.
-     *
-     * @param  array|Traversable $routes
-     * @return SimpleRouteStack
-     */
-    public function setRoutes($routes)
+    public function setRoutes(iterable $routes) : void
     {
         $this->routes->clear();
         $this->addRoutes($routes);
-        return $this;
     }
 
-    /**
-     * Get the added routes
-     *
-     * @return Traversable list of all routes
-     */
-    public function getRoutes()
+    public function getRoutes() : array
     {
-        return $this->routes;
+        return $this->routes->toArray($this->routes::EXTR_DATA);
     }
 
-    /**
-     * Check if a route with a specific name exists
-     *
-     * @param  string $name
-     * @return bool true if route exists
-     */
-    public function hasRoute($name)
+    public function hasRoute(string $name) : bool
     {
         return $this->routes->get($name) !== null;
     }
 
-    /**
-     * Get a route by name
-     *
-     * @param string $name
-     * @return RouteInterface the route
-     */
-    public function getRoute($name)
+    public function getRoute(string $name) : ?RouteInterface
     {
         return $this->routes->get($name);
     }
 
-    /**
-     * Set a default parameters.
-     *
-     * @param  array $params
-     * @return SimpleRouteStack
-     */
-    public function setDefaultParams(array $params)
+    public function setDefaultParams(array $params) : void
     {
         $this->defaultParams = $params;
-        return $this;
     }
 
     /**
      * Set a default parameter.
      *
-     * @param  string $name
-     * @param  mixed  $value
-     * @return SimpleRouteStack
+     * @param mixed $value
      */
-    public function setDefaultParam($name, $value)
+    public function setDefaultParam(string $name, $value) : void
     {
         $this->defaultParams[$name] = $value;
-        return $this;
     }
 
-    /**
-     * Create a route from array specifications.
-     *
-     * @param  array|Traversable $specs
-     * @return RouteInterface
-     * @throws Exception\InvalidArgumentException
-     */
-    protected function routeFromArray($specs)
+    public function match(Request $request, int $pathOffset = 0, array $options = []) : RouteResult
     {
-        if ($specs instanceof Traversable) {
-            $specs = ArrayUtils::iteratorToArray($specs);
-        }
-
-        if (! is_array($specs)) {
-            throw new Exception\InvalidArgumentException('Route definition must be an array or Traversable object');
-        }
-
-        if (! isset($specs['type'])) {
-            throw new Exception\InvalidArgumentException('Missing "type" option');
-        }
-
-        if (! isset($specs['options'])) {
-            $specs['options'] = [];
-        }
-
-        $route = $this->getRoutePluginManager()->get($specs['type'], $specs['options']);
-
-        if (isset($specs['priority'])) {
-            $route->priority = $specs['priority'];
-        }
-
-        return $route;
-    }
-
-    /**
-     * match(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request $request
-     * @return RouteMatch|null
-     */
-    public function match(Request $request)
-    {
+        $methodFailureResults = [];
         foreach ($this->routes as $name => $route) {
-            if (($match = $route->match($request)) instanceof RouteMatch) {
-                $match->setMatchedRouteName($name);
-
-                foreach ($this->defaultParams as $paramName => $value) {
-                    if ($match->getParam($paramName) === null) {
-                        $match->setParam($paramName, $value);
-                    }
-                }
-
-                return $match;
+            /** @var RouteInterface $route */
+            $result = $route->match($request, $pathOffset, $options);
+            if ($result->isSuccess()) {
+                $result = $result->withMatchedRouteName($name);
+                $result = $result->withMatchedParams(
+                    array_merge($this->defaultParams, $result->getMatchedParams())
+                );
+                return $result;
+            }
+            if ($result->isMethodFailure()) {
+                $methodFailureResults[] = $result;
             }
         }
 
-        return;
+        if (! empty($methodFailureResults)) {
+            $allowedMethods = array_reduce($methodFailureResults, function (array $methods, RouteResult $result) {
+                return $methods + $result->getAllowedMethods();
+            }, []);
+            return RouteResult::fromMethodFailure($allowedMethods);
+        }
+        return RouteResult::fromRouteFailure();
     }
 
     /**
-     * assemble(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
-     * @throws Exception\InvalidArgumentException
-     * @throws Exception\RuntimeException
+     * @throws InvalidArgumentException
+     * @throws RuntimeException
      */
-    public function assemble(array $params = [], array $options = [])
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
         if (! isset($options['name'])) {
-            throw new Exception\InvalidArgumentException('Missing "name" option');
+            throw new InvalidArgumentException('Missing "name" option');
         }
 
         $route = $this->routes->get($options['name']);
 
         if (! $route) {
-            throw new Exception\RuntimeException(sprintf('Route with name "%s" not found', $options['name']));
+            throw new RuntimeException(sprintf('Route with name "%s" not found', $options['name']));
         }
 
         unset($options['name']);
 
-        return $route->assemble(array_merge($this->defaultParams, $params), $options);
+        return $route->assemble($uri, array_merge($this->defaultParams, $params), $options);
     }
 }

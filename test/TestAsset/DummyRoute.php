@@ -9,48 +9,23 @@ declare(strict_types=1);
 
 namespace ZendTest\Router\TestAsset;
 
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
 use Zend\Router\RouteInterface;
-use Zend\Router\RouteMatch;
-use Zend\Stdlib\RequestInterface;
+use Zend\Router\RouteResult;
 
 /**
  * Dummy route.
  */
 class DummyRoute implements RouteInterface
 {
-    /**
-     * match(): defined by RouteInterface interface.
-     *
-     * @see    Route::match()
-     * @param  RequestInterface $request
-     * @return RouteMatch
-     */
-    public function match(RequestInterface $request)
+    public function match(Request $request, int $pathOffset = 0, array $options = []) : RouteResult
     {
-        return new RouteMatch([]);
+        return RouteResult::fromRouteMatch([]);
     }
 
-    /**
-     * assemble(): defined by RouteInterface interface.
-     *
-     * @see    Route::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
-     */
-    public function assemble(array $params = null, array $options = null)
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
-        return '';
-    }
-
-    /**
-     * factory(): defined by RouteInterface interface
-     *
-     * @param  array|\Traversable $options
-     * @return DummyRoute
-     */
-    public static function factory($options = [])
-    {
-        return new static();
+        return $uri;
     }
 }
