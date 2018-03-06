@@ -9,16 +9,26 @@ declare(strict_types=1);
 
 namespace Zend\Router\Route;
 
-use Traversable;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
 use Zend\Router\Exception;
+use Zend\Router\PartialRouteInterface;
+use Zend\Router\PartialRouteResult;
 use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+
+use function array_map;
+use function explode;
+use function in_array;
+use function is_array;
+use function strtoupper;
 
 /**
  * Method route.
  */
-class Method implements RouteInterface
+class Method implements PartialRouteInterface
 {
+    use PartialRouteTrait;
+
     /**
      * Verb to match.
      *
@@ -35,33 +45,22 @@ class Method implements RouteInterface
 
     /**
      * Create a new method route.
-     *
-     * @param  string $verb
-     * @param  array  $defaults
      */
-    public function __construct($verb, array $defaults = [])
+    public function __construct(string $verb, array $defaults = [])
     {
-        $this->verb     = $verb;
+        $this->verb = $verb;
         $this->defaults = $defaults;
     }
 
     /**
-     * factory(): defined by RouteInterface interface.
+     * Create a new method route.
      *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  array|Traversable $options
-     * @return Method
      * @throws Exception\InvalidArgumentException
      */
-    public static function factory($options = [])
+    public static function factory(iterable $options = []) : self
     {
-        if ($options instanceof Traversable) {
+        if (! is_array($options)) {
             $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
         }
 
         if (! isset($options['verb'])) {
@@ -75,52 +74,40 @@ class Method implements RouteInterface
         return new static($options['verb'], $options['defaults']);
     }
 
-    /**
-     * match(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request $request
-     * @return RouteMatch|null
-     */
-    public function match(Request $request)
+    public function partialMatch(Request $request, int $pathOffset = 0, array $options = []) : PartialRouteResult
     {
-        if (! method_exists($request, 'getMethod')) {
-            return;
+        if ($pathOffset < 0) {
+            throw new Exception\InvalidArgumentException('Path offset cannot be negative');
         }
-
         $requestVerb = strtoupper($request->getMethod());
-        $matchVerbs  = explode(',', strtoupper($this->verb));
-        $matchVerbs  = array_map('trim', $matchVerbs);
+        $matchVerbs = explode(',', strtoupper($this->verb));
+        $matchVerbs = array_map('trim', $matchVerbs);
 
         if (in_array($requestVerb, $matchVerbs)) {
-            return new RouteMatch($this->defaults);
+            return PartialRouteResult::fromRouteMatch($this->defaults, $pathOffset, 0);
         }
 
-        return;
+        return PartialRouteResult::fromMethodFailure($matchVerbs, $pathOffset, 0);
     }
 
-    /**
-     * assemble(): Defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
-     */
-    public function assemble(array $params = [], array $options = [])
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
-        // The request method does not contribute to the path, thus nothing is returned.
-        return '';
+        return $uri;
     }
 
     /**
-     * getAssembledParams(): defined by RouteInterface interface.
-     *
-     * @see    RouteInterface::getAssembledParams
-     * @return array
+     * Method routes are not using parameters to assemble uri
      */
-    public function getAssembledParams()
+    public function getLastAssembledParams() : array
     {
         return [];
+    }
+
+    /**
+     * @deprecated
+     */
+    public function getAssembledParams() : array
+    {
+        return $this->getLastAssembledParams();
     }
 }
