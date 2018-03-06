@@ -9,16 +9,22 @@ declare(strict_types=1);
 
 namespace Zend\Router\Route;
 
-use Traversable;
-use Zend\Router\Exception;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteInterface;
+use Zend\Router\PartialRouteResult;
 use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+
+use function is_array;
 
 /**
  * Scheme route.
  */
-class Scheme implements RouteInterface
+class Scheme implements PartialRouteInterface
 {
+    use PartialRouteTrait;
+
     /**
      * Scheme to match.
      *
@@ -35,37 +41,24 @@ class Scheme implements RouteInterface
 
     /**
      * Create a new scheme route.
-     *
-     * @param  string $scheme
-     * @param  array  $defaults
      */
-    public function __construct($scheme, array $defaults = [])
+    public function __construct(string $scheme, array $defaults = [])
     {
-        $this->scheme   = $scheme;
+        $this->scheme = $scheme;
         $this->defaults = $defaults;
     }
 
     /**
-     * factory(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  array|Traversable $options
-     * @return Scheme
-     * @throws Exception\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
-    public static function factory($options = [])
+    public static function factory(iterable $options = []) : self
     {
-        if ($options instanceof Traversable) {
+        if (! is_array($options)) {
             $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
         }
 
         if (! isset($options['scheme'])) {
-            throw new Exception\InvalidArgumentException('Missing "scheme" in options array');
+            throw new InvalidArgumentException('Missing "scheme" in options array');
         }
 
         if (! isset($options['defaults'])) {
@@ -76,54 +69,38 @@ class Scheme implements RouteInterface
     }
 
     /**
-     * match(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request $request
-     * @return RouteMatch|null
+     * @throws InvalidArgumentException
      */
-    public function match(Request $request)
+    public function partialMatch(Request $request, int $pathOffset = 0, array $options = []) : PartialRouteResult
     {
-        if (! method_exists($request, 'getUri')) {
-            return;
+        if ($pathOffset < 0) {
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
-
-        $uri    = $request->getUri();
+        $uri = $request->getUri();
         $scheme = $uri->getScheme();
 
         if ($scheme !== $this->scheme) {
-            return;
+            return PartialRouteResult::fromRouteFailure();
         }
 
-        return new RouteMatch($this->defaults);
+        return PartialRouteResult::fromRouteMatch($this->defaults, $pathOffset, 0);
     }
 
-    /**
-     * assemble(): Defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
-     */
-    public function assemble(array $params = [], array $options = [])
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
-        if (isset($options['uri'])) {
-            $options['uri']->setScheme($this->scheme);
-        }
-
-        // A scheme does not contribute to the path, thus nothing is returned.
-        return '';
+        return $uri->withScheme($this->scheme);
     }
 
-    /**
-     * getAssembledParams(): defined by RouteInterface interface.
-     *
-     * @see    RouteInterface::getAssembledParams
-     * @return array
-     */
-    public function getAssembledParams()
+    public function getLastAssembledParams() : array
     {
         return [];
+    }
+
+    /**
+     * @deprecated
+     */
+    public function getAssembledParams() : array
+    {
+        return $this->getLastAssembledParams();
     }
 }

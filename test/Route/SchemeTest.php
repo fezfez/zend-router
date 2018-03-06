@@ -10,11 +10,11 @@ declare(strict_types=1);
 namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
-use Zend\Http\Request;
-use Zend\Router\Route\RouteMatch;
+use Psr\Http\Message\ServerRequestInterface;
+use Zend\Diactoros\ServerRequest;
+use Zend\Diactoros\Uri;
+use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Route\Scheme;
-use Zend\Stdlib\Request as BaseRequest;
-use Zend\Uri\Http as HttpUri;
 use ZendTest\Router\FactoryTester;
 
 /**
@@ -22,52 +22,63 @@ use ZendTest\Router\FactoryTester;
  */
 class SchemeTest extends TestCase
 {
+    /**
+     * @var ServerRequestInterface
+     */
+    private $request;
+
+    protected function setUp()
+    {
+        $this->request = new ServerRequest([], [], null, null, 'php://memory');
+    }
+
     public function testMatching()
     {
-        $request = new Request();
-        $request->setUri('https://example.com/');
+        $request = $this->request->withUri((new Uri())->withScheme('https'));
 
         $route = new Scheme('https');
-        $match = $route->match($request);
+        $result = $route->match($request);
 
-        $this->assertInstanceOf(RouteMatch::class, $match);
+        $this->assertTrue($result->isSuccess());
+    }
+
+    public function testMatchReturnsResultWithDefaultParameters()
+    {
+        $request = $this->request->withUri((new Uri())->withScheme('https'));
+
+        $route = new Scheme('https', ['foo' => 'bar']);
+        $result = $route->match($request);
+
+        $this->assertEquals(['foo' => 'bar'], $result->getMatchedParams());
     }
 
     public function testNoMatchingOnDifferentScheme()
     {
-        $request = new Request();
-        $request->setUri('http://example.com/');
+        $request = $this->request->withUri((new Uri())->withScheme('http'));
 
         $route = new Scheme('https');
-        $match = $route->match($request);
+        $result = $route->match($request);
 
-        $this->assertNull($match);
+        $this->assertTrue($result->isFailure());
     }
 
     public function testAssembling()
     {
-        $uri   = new HttpUri();
+        $uri = new Uri();
         $route = new Scheme('https');
-        $path  = $route->assemble([], ['uri' => $uri]);
+        $resultUri = $route->assemble($uri);
 
-        $this->assertEquals('', $path);
-        $this->assertEquals('https', $uri->getScheme());
-    }
-
-    public function testNoMatchWithoutUriMethod()
-    {
-        $route   = new Scheme('https');
-        $request = new BaseRequest();
-
-        $this->assertNull($route->match($request));
+        $this->assertEquals('https', $resultUri->getScheme());
     }
 
     public function testGetAssembledParams()
     {
+        $uri = new Uri();
         $route = new Scheme('https');
-        $route->assemble(['foo' => 'bar']);
+        $route->assemble($uri, ['foo' => 'bar']);
 
-        $this->assertEquals([], $route->getAssembledParams());
+        $this->assertEquals([], $route->getLastAssembledParams());
+        $this->assertEquals($route->getLastAssembledParams(), $route->getAssembledParams());
     }
 
     public function testFactory()
@@ -82,5 +93,14 @@ class SchemeTest extends TestCase
                 'scheme' => 'http',
             ]
         );
+    }
+
+    public function testRejectsNegativePathOffset()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path offset cannot be negative');
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Scheme('https');
+        $route->partialMatch($request->reveal(), -1);
     }
 }
