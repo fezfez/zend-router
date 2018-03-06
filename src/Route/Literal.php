@@ -1,7 +1,7 @@
 <?php
 /**
  * @link      http://github.com/zendframework/zend-router for the canonical source repository
- * @copyright Copyright (c) 2005-2016 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright Copyright (c) 2005-2018 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
@@ -9,63 +9,64 @@ declare(strict_types=1);
 
 namespace Zend\Router\Route;
 
-use Traversable;
-use Zend\Router\Exception;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteInterface;
+use Zend\Router\PartialRouteResult;
 use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+
+use function is_array;
+use function strlen;
+use function strpos;
 
 /**
  * Literal route.
  */
-class Literal implements RouteInterface
+class Literal implements PartialRouteInterface
 {
+    use PartialRouteTrait;
+
     /**
-     * RouteInterface to match.
+     * Uri path to match
      *
      * @var string
      */
-    protected $route;
+    private $path;
 
     /**
      * Default values.
      *
      * @var array
      */
-    protected $defaults;
+    private $defaults;
 
     /**
      * Create a new literal route.
      *
-     * @param  string $route
-     * @param  array  $defaults
+     * @throws InvalidArgumentException on empty path
      */
-    public function __construct($route, array $defaults = [])
+    public function __construct(string $path, array $defaults = [])
     {
-        $this->route    = $route;
+        if (empty($path)) {
+            throw new InvalidArgumentException('Literal uri path part cannot be empty');
+        }
+        $this->path = $path;
         $this->defaults = $defaults;
     }
 
     /**
-     * factory(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  array|Traversable $options
-     * @return Literal
-     * @throws Exception\InvalidArgumentException
+     * @todo provide factory for route plugin manager
+     * @throws InvalidArgumentException
      */
-    public static function factory($options = [])
+    public static function factory(iterable $options = []) : self
     {
-        if ($options instanceof Traversable) {
+        if (! is_array($options)) {
             $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
         }
 
         if (! isset($options['route'])) {
-            throw new Exception\InvalidArgumentException('Missing "route" in options array');
+            throw new InvalidArgumentException('Missing "route" in options array');
         }
 
         if (! isset($options['defaults'])) {
@@ -76,60 +77,45 @@ class Literal implements RouteInterface
     }
 
     /**
-     * match(): defined by RouteInterface interface.
+     * Attempt to match ServerRequestInterface by checking for literal
+     * path segment at offset position.
      *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request      $request
-     * @param  integer|null $pathOffset
-     * @return RouteMatch|null
+     * @throws InvalidArgumentException
      */
-    public function match(Request $request, $pathOffset = null)
+    public function partialMatch(Request $request, int $pathOffset = 0, array $options = []) : PartialRouteResult
     {
-        if (! method_exists($request, 'getUri')) {
-            return;
+        if ($pathOffset < 0) {
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
+        $path = $request->getUri()->getPath();
 
-        $uri  = $request->getUri();
-        $path = $uri->getPath();
-
-        if ($pathOffset !== null) {
-            if ($pathOffset >= 0 && strlen((string) $path) >= $pathOffset && ! empty($this->route)) {
-                if (strpos($path, $this->route, $pathOffset) === $pathOffset) {
-                    return new RouteMatch($this->defaults, strlen($this->route));
-                }
-            }
-
-            return;
+        if (strpos($path, $this->path, $pathOffset) === $pathOffset) {
+            return PartialRouteResult::fromRouteMatch($this->defaults, $pathOffset, strlen($this->path));
         }
-
-        if ($path === $this->route) {
-            return new RouteMatch($this->defaults, strlen($this->route));
-        }
-
-        return;
+        return PartialRouteResult::fromRouteFailure();
     }
 
     /**
-     * assemble(): Defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
+     * Assemble url by appending literal path part
      */
-    public function assemble(array $params = [], array $options = [])
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
-        return $this->route;
+        return $uri->withPath($uri->getPath() . $this->path);
     }
 
     /**
-     * getAssembledParams(): defined by RouteInterface interface.
-     *
-     * @see    RouteInterface::getAssembledParams
-     * @return array
+     * Literal routes are not using parameters to assemble uri
      */
-    public function getAssembledParams()
+    public function getLastAssembledParams() : array
     {
         return [];
+    }
+
+    /**
+     * @deprecated
+     */
+    public function getAssembledParams() : array
+    {
+        return $this->getLastAssembledParams();
     }
 }

@@ -1,7 +1,7 @@
 <?php
 /**
  * @link      http://github.com/zendframework/zend-router for the canonical source repository
- * @copyright Copyright (c) 2005-2016 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright Copyright (c) 2005-2018 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
@@ -10,114 +10,101 @@ declare(strict_types=1);
 namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
-use Zend\Http\Request;
+use Psr\Http\Message\ServerRequestInterface;
+use Zend\Diactoros\Uri;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteResult;
 use Zend\Router\Route\Literal;
-use Zend\Router\Route\RouteMatch;
-use Zend\Stdlib\Request as BaseRequest;
+use Zend\Router\RouteResult;
 use ZendTest\Router\FactoryTester;
+use ZendTest\Router\Route\TestAsset\RouteTestDefinition;
 
 /**
  * @covers \Zend\Router\Route\Literal
  */
 class LiteralTest extends TestCase
 {
-    public static function routeProvider()
+    use PartialRouteTestTrait;
+
+    public function getRouteTestDefinitions() : iterable
     {
-        return [
-            'simple-match' => [
-                new Literal('/foo'),
-                '/foo',
-                null,
-                true
-            ],
-            'no-match-without-leading-slash' => [
-                new Literal('foo'),
-                '/foo',
-                null,
-                false
-            ],
-            'no-match-with-trailing-slash' => [
-                new Literal('/foo'),
-                '/foo/',
-                null,
-                false
-            ],
-            'offset-skips-beginning' => [
-                new Literal('foo'),
-                '/foo',
-                1,
-                true
-            ],
-            'offset-enables-partial-matching' => [
-                new Literal('/foo'),
-                '/foo/bar',
-                0,
-                true
-            ],
-        ];
-    }
+        yield 'simple match' => (new RouteTestDefinition(
+            new Literal('/foo'),
+            new Uri('/foo')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching();
 
-    /**
-     * @dataProvider routeProvider
-     * @param        Literal $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        bool    $shouldMatch
-     */
-    public function testMatching(Literal $route, $path, $offset, $shouldMatch)
-    {
-        $request = new Request();
-        $request->setUri('http://example.com' . $path);
-        $match = $route->match($request, $offset);
+        yield 'no match without leading slash' => (new RouteTestDefinition(
+            new Literal('foo'),
+            new Uri('/foo')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteFailure()
+            );
 
-        if (! $shouldMatch) {
-            $this->assertNull($match);
-        } else {
-            $this->assertInstanceOf(RouteMatch::class, $match);
-
-            if ($offset === null) {
-                $this->assertEquals(strlen($path), $match->getLength());
-            }
-        }
-    }
-
-    /**
-     * @dataProvider routeProvider
-     * @param        Literal $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        bool    $shouldMatch
-     */
-    public function testAssembling(Literal $route, $path, $offset, $shouldMatch)
-    {
-        if (! $shouldMatch) {
-            // Data which will not match are not tested for assembling.
-            return;
-        }
-
-        $result = $route->assemble();
-
-        if ($offset !== null) {
-            $this->assertEquals($offset, strpos($path, $result, $offset));
-        } else {
-            $this->assertEquals($path, $result);
-        }
-    }
-
-    public function testNoMatchWithoutUriMethod()
-    {
-        $route   = new Literal('/foo');
-        $request = new BaseRequest();
-
-        $this->assertNull($route->match($request));
+        yield 'only partial match with trailing slash' => (new RouteTestDefinition(
+            new Literal('/foo'),
+            new Uri('/foo/')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 4)
+            );
+        yield 'offset skips beginning' => (new RouteTestDefinition(
+            new Literal('foo'),
+            new Uri('/foo')
+        ))
+            ->usePathOffset(1)
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 1, 3)
+            );
+        yield 'offset does not prevent partial match' => (new RouteTestDefinition(
+            new Literal('foo'),
+            new Uri('/foo/bar')
+        ))
+            ->usePathOffset(1)
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 1, 3)
+            );
+        yield 'assemble appends to path present in provided uri' => (new RouteTestDefinition(
+            new Literal('/foo'),
+            new Uri('/foo')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 4)
+            )
+            ->useUriForAssemble(new Uri('/bar'))
+            ->shouldAssembleAndExpectResult(new Uri('/bar/foo'));
     }
 
     public function testGetAssembledParams()
     {
+        $uri = new Uri();
         $route = new Literal('/foo');
-        $route->assemble(['foo' => 'bar']);
+        $route->assemble($uri, ['foo' => 'bar']);
 
-        $this->assertEquals([], $route->getAssembledParams());
+        $this->assertEquals([], $route->getLastAssembledParams());
+        $this->assertEquals($route->getLastAssembledParams(), $route->getAssembledParams());
     }
 
     public function testFactory()
@@ -126,21 +113,27 @@ class LiteralTest extends TestCase
         $tester->testFactory(
             Literal::class,
             [
-                'route' => 'Missing "route" in options array'
+                'route' => 'Missing "route" in options array',
             ],
             [
-                'route' => '/foo'
+                'route' => '/foo',
             ]
         );
     }
 
-    /**
-     * @group ZF2-436
-     */
     public function testEmptyLiteral()
     {
-        $request = new Request();
-        $route = new Literal('');
-        $this->assertNull($route->match($request, 0));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Literal uri path part cannot be empty');
+        new Literal('');
+    }
+
+    public function testRejectsNegativePathOffset()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path offset cannot be negative');
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Literal('/foo');
+        $route->partialMatch($request->reveal(), -1);
     }
 }

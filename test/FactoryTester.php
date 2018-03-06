@@ -42,14 +42,6 @@ class FactoryTester
      */
     public function testFactory($classname, array $requiredOptions, array $options)
     {
-        // Test that the factory does not allow a scalar option.
-        try {
-            $classname::factory(0);
-            $this->testCase->fail('An expected exception was not thrown');
-        } catch (\Zend\Router\Exception\InvalidArgumentException $e) {
-            $this->testCase->assertContains('factory expects an array or Traversable set of options', $e->getMessage());
-        }
-
         // Test required options.
         foreach ($requiredOptions as $option => $exceptionMessage) {
             $testOptions = $options;
