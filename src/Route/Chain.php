@@ -9,26 +9,31 @@ declare(strict_types=1);
 
 namespace Zend\Router\Route;
 
-use ArrayObject;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
 use Traversable;
-use Zend\Router\Exception;
-use Zend\Router\PriorityList;
-use Zend\Router\RoutePluginManager;
-use Zend\Router\TreeRouteStack;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteInterface;
+use Zend\Router\PartialRouteResult;
+use Zend\Router\RouteInterface;
+use Zend\Router\SimpleRouteStack;
 use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+
+use function array_diff_key;
+use function array_flip;
+use function array_intersect;
+use function array_merge;
+use function array_reverse;
+use function end;
+use function is_array;
+use function key;
 
 /**
  * Chain route.
  */
-class Chain extends TreeRouteStack implements RouteInterface
+class Chain extends SimpleRouteStack implements PartialRouteInterface
 {
-    /**
-     * Chain routes.
-     *
-     * @var array
-     */
-    protected $chainRoutes;
+    use PartialRouteTrait;
 
     /**
      * List of assembled parameters.
@@ -38,157 +43,156 @@ class Chain extends TreeRouteStack implements RouteInterface
     protected $assembledParams = [];
 
     /**
-     * Create a new part route.
-     *
-     * @param  array              $routes
-     * @param  RoutePluginManager $routePlugins
-     * @param  ArrayObject|null   $prototypes
+     * Create a new chain route.
      */
-    public function __construct(array $routes, RoutePluginManager $routePlugins, ArrayObject $prototypes = null)
+    public function __construct(array $routes)
     {
-        $this->chainRoutes         = array_reverse($routes);
-        $this->routePluginManager  = $routePlugins;
-        $this->routes              = new PriorityList();
-        $this->prototypes          = $prototypes;
+        parent::__construct();
+        $routes = array_reverse($routes, true);
+        $this->addRoutes($routes);
     }
 
     /**
-     * factory(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  mixed $options
-     * @throws Exception\InvalidArgumentException
-     * @return Part
+     * @throws InvalidArgumentException
      */
-    public static function factory($options = [])
+    public static function factory(iterable $options = []) : self
     {
-        if ($options instanceof Traversable) {
+        if (! is_array($options)) {
             $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
         }
 
         if (! isset($options['routes'])) {
-            throw new Exception\InvalidArgumentException('Missing "routes" in options array');
-        }
-
-        if (! isset($options['prototypes'])) {
-            $options['prototypes'] = null;
+            throw new InvalidArgumentException('Missing "routes" in options array');
         }
 
         if ($options['routes'] instanceof Traversable) {
-            $options['routes'] = ArrayUtils::iteratorToArray($options['child_routes']);
-        }
-
-        if (! isset($options['route_plugins'])) {
-            throw new Exception\InvalidArgumentException('Missing "route_plugins" in options array');
+            $options['routes'] = ArrayUtils::iteratorToArray($options['routes']);
         }
 
         return new static(
-            $options['routes'],
-            $options['route_plugins'],
-            $options['prototypes']
+            $options['routes']
         );
     }
 
     /**
-     * match(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request  $request
-     * @param  int|null $pathOffset
-     * @param  array    $options
-     * @return RouteMatch|null
+     * @throws InvalidArgumentException
      */
-    public function match(Request $request, $pathOffset = null, array $options = [])
+    public function addRoute(string $name, RouteInterface $route, int $priority = null) : void
     {
-        if (! method_exists($request, 'getUri')) {
-            return;
+        if (! $route instanceof PartialRouteInterface) {
+            throw new InvalidArgumentException('Chain route can only chain partial routes');
         }
-
-        if ($pathOffset === null) {
-            $mustTerminate = true;
-            $pathOffset    = 0;
-        } else {
-            $mustTerminate = false;
-        }
-
-        if ($this->chainRoutes !== null) {
-            $this->addRoutes($this->chainRoutes);
-            $this->chainRoutes = null;
-        }
-
-        $match      = new RouteMatch([]);
-        $uri        = $request->getUri();
-        $pathLength = strlen($uri->getPath());
-
-        foreach ($this->routes as $route) {
-            $subMatch = $route->match($request, $pathOffset, $options);
-
-            if ($subMatch === null) {
-                return;
-            }
-
-            $match->merge($subMatch);
-            $pathOffset += $subMatch->getLength();
-        }
-
-        if ($mustTerminate && $pathOffset !== $pathLength) {
-            return;
-        }
-
-        return $match;
+        parent::addRoute($name, $route, $priority);
     }
 
     /**
-     * assemble(): Defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
+     * @throws InvalidArgumentException
      */
-    public function assemble(array $params = [], array $options = [])
+    public function partialMatch(Request $request, int $pathOffset = 0, array $options = []) : PartialRouteResult
     {
-        if ($this->chainRoutes !== null) {
-            $this->addRoutes($this->chainRoutes);
-            $this->chainRoutes = null;
+        if ($pathOffset < 0) {
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
 
+        $nextPathOffset = $pathOffset;
+        $methodFailure = false;
+        $allowedMethods = null;
+        $matchedParams = [];
+
+        if ($this->routes->count() === 0) {
+            return PartialRouteResult::fromRouteFailure();
+        }
+
+        foreach ($this->getRoutes() as $route) {
+            /** @var PartialRouteInterface $route */
+            $result = $route->partialMatch($request, $nextPathOffset, $options);
+
+            if ($result->isFailure() && ! $result->isMethodFailure()) {
+                return $result;
+            }
+
+            if ($result->isMethodFailure()) {
+                $methodFailure = true;
+                // make all following method routes fail, needed for allowed
+                // methods gathering by Part route even tho it should not
+                // be normally allowed to be chained
+                $options[Method::OPTION_FORCE_METHOD_FAILURE] = true;
+
+                $allowedMethods = $allowedMethods ?? $result->getAllowedMethods();
+                $allowedMethods = array_intersect(
+                    $allowedMethods,
+                    $result->getAllowedMethods()
+                );
+            }
+
+            if ($result->isSuccess()) {
+                $matchedParams = array_merge($matchedParams, $result->getMatchedParams());
+
+                $options['parent_match_params'] = $options['parent_match_params'] ?? [];
+                $options['parent_match_params'] += $matchedParams;
+
+                $methods = $result->getMatchedAllowedMethods();
+                if (! empty($methods)) {
+                    $allowedMethods = $allowedMethods ?? $methods;
+                    $allowedMethods = array_intersect($allowedMethods, $methods);
+                }
+            }
+
+            $nextPathOffset += $result->getMatchedPathLength();
+        }
+
+        $matchedLength = $nextPathOffset - $pathOffset;
+        if ($methodFailure) {
+            if (empty($allowedMethods)) {
+                return PartialRouteResult::fromRouteFailure();
+            }
+            return PartialRouteResult::fromMethodFailure($allowedMethods, $pathOffset, $matchedLength);
+        }
+
+        // explicitly discarding chained route names if any
+        return PartialRouteResult::fromRouteMatch(
+            $matchedParams,
+            $pathOffset,
+            $matchedLength,
+            null,
+            $allowedMethods
+        );
+    }
+
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
+    {
         $this->assembledParams = [];
 
         $routes = ArrayUtils::iteratorToArray($this->routes);
-
         end($routes);
         $lastRouteKey = key($routes);
-        $path         = '';
 
         foreach ($routes as $key => $route) {
+            /** @var PartialRouteInterface $route */
             $chainOptions = $options;
-            $hasChild     = isset($options['has_child']) ? $options['has_child'] : false;
+            $hasChild = isset($options['has_child']) ? $options['has_child'] : false;
 
-            $chainOptions['has_child'] = ($hasChild || $key !== $lastRouteKey);
+            $chainOptions['has_child'] = $hasChild || $key !== $lastRouteKey;
 
-            $path   .= $route->assemble($params, $chainOptions);
-            $params  = array_diff_key($params, array_flip($route->getAssembledParams()));
+            $uri = $route->assemble($uri, $params, $chainOptions);
+            $params = array_diff_key($params, array_flip($route->getLastAssembledParams()));
 
-            $this->assembledParams += $route->getAssembledParams();
+            $this->assembledParams = array_merge($this->assembledParams, $route->getLastAssembledParams());
         }
 
-        return $path;
+        return $uri;
+    }
+
+    public function getLastAssembledParams() : array
+    {
+        return $this->assembledParams;
     }
 
     /**
-     * getAssembledParams(): defined by RouteInterface interface.
-     *
-     * @see    RouteInterface::getAssembledParams
-     * @return array
+     * @deprecated
      */
-    public function getAssembledParams()
+    public function getAssembledParams() : array
     {
-        return $this->assembledParams;
+        return $this->getLastAssembledParams();
     }
 }
