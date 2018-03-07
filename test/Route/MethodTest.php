@@ -40,7 +40,7 @@ class MethodTest extends TestCase
                 RouteResult::fromRouteMatch([])
             )
             ->expectPartialMatchResult(
-                PartialRouteResult::fromRouteMatch([], 0, 0)
+                PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET'])
             );
 
         yield 'match comma separated verbs' => (new RouteTestDefinition(
@@ -51,7 +51,7 @@ class MethodTest extends TestCase
                 RouteResult::fromRouteMatch([])
             )
             ->expectPartialMatchResult(
-                PartialRouteResult::fromRouteMatch([], 0, 0)
+                PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET', 'POST'])
             );
 
         yield 'match comma separated verbs with whitespace' => (new RouteTestDefinition(
@@ -62,7 +62,7 @@ class MethodTest extends TestCase
                 RouteResult::fromRouteMatch([])
             )
             ->expectPartialMatchResult(
-                PartialRouteResult::fromRouteMatch([], 0, 0)
+                PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET', 'POST', 'NULL'])
             );
 
         yield 'match ignores case' => (new RouteTestDefinition(
@@ -73,7 +73,7 @@ class MethodTest extends TestCase
                 RouteResult::fromRouteMatch([])
             )
             ->expectPartialMatchResult(
-                PartialRouteResult::fromRouteMatch([], 0, 0)
+                PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET'])
             );
 
         yield 'no match gives list of allowed methods' => (new RouteTestDefinition(
@@ -94,6 +94,16 @@ class MethodTest extends TestCase
         $method = new Method('get');
 
         $this->assertSame($uri, $method->assemble($uri));
+    }
+
+    public function testSetsAllowedMethodsOnMatch()
+    {
+        $request = new ServerRequest([], [], null, 'GET');
+        $method = new Method('GET');
+        $result = $method->partialMatch($request);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertEquals(['GET'], $result->getMatchedAllowedMethods());
     }
 
     public function testFactory()

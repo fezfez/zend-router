@@ -11,7 +11,7 @@ namespace Zend\Router\Route;
 
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Psr\Http\Message\UriInterface;
-use Zend\Router\Exception;
+use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\PartialRouteInterface;
 use Zend\Router\PartialRouteResult;
 use Zend\Stdlib\ArrayUtils;
@@ -28,6 +28,8 @@ use function strtoupper;
 class Method implements PartialRouteInterface
 {
     use PartialRouteTrait;
+
+    public const OPTION_FORCE_METHOD_FAILURE = 'force_method_failure';
 
     /**
      * Verb to match.
@@ -55,7 +57,7 @@ class Method implements PartialRouteInterface
     /**
      * Create a new method route.
      *
-     * @throws Exception\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public static function factory(iterable $options = []) : self
     {
@@ -64,7 +66,7 @@ class Method implements PartialRouteInterface
         }
 
         if (! isset($options['verb'])) {
-            throw new Exception\InvalidArgumentException('Missing "verb" in options array');
+            throw new InvalidArgumentException('Missing "verb" in options array');
         }
 
         if (! isset($options['defaults'])) {
@@ -74,17 +76,21 @@ class Method implements PartialRouteInterface
         return new static($options['verb'], $options['defaults']);
     }
 
+    /**
+     * @throws InvalidArgumentException
+     */
     public function partialMatch(Request $request, int $pathOffset = 0, array $options = []) : PartialRouteResult
     {
         if ($pathOffset < 0) {
-            throw new Exception\InvalidArgumentException('Path offset cannot be negative');
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
         $requestVerb = strtoupper($request->getMethod());
         $matchVerbs = explode(',', strtoupper($this->verb));
         $matchVerbs = array_map('trim', $matchVerbs);
 
-        if (in_array($requestVerb, $matchVerbs)) {
-            return PartialRouteResult::fromRouteMatch($this->defaults, $pathOffset, 0);
+        $forceFailure = $options[self::OPTION_FORCE_METHOD_FAILURE] ?? false;
+        if (! $forceFailure && in_array($requestVerb, $matchVerbs)) {
+            return PartialRouteResult::fromRouteMatch($this->defaults, $pathOffset, 0, null, $matchVerbs);
         }
 
         return PartialRouteResult::fromMethodFailure($matchVerbs, $pathOffset, 0);
