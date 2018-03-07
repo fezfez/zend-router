@@ -10,366 +10,462 @@ declare(strict_types=1);
 namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
-use Zend\Http\Request;
+use Psr\Http\Message\ServerRequestInterface;
+use Zend\Diactoros\ServerRequest;
+use Zend\Diactoros\Uri;
 use Zend\I18n\Translator\Loader\FileLoaderInterface;
 use Zend\I18n\Translator\TextDomain;
 use Zend\I18n\Translator\Translator;
 use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
-use Zend\Router\Route\RouteMatch;
+use Zend\Router\PartialRouteResult;
+use Zend\Router\Route\PartialRouteTrait;
 use Zend\Router\Route\Segment;
-use Zend\Stdlib\Request as BaseRequest;
+use Zend\Router\RouteResult;
 use ZendTest\Router\FactoryTester;
+use ZendTest\Router\Route\TestAsset\RouteTestDefinition;
+
+use function implode;
 
 /**
  * @covers \Zend\Router\Route\Segment
  */
 class SegmentTest extends TestCase
 {
-    public function routeProvider()
+    use PartialRouteTrait;
+    use RouteTestTrait;
+
+    public function getRouteTestDefinitions() : iterable
     {
-        return [
-            'simple-match' => [
-                new Segment('/:foo'),
-                '/bar',
-                null,
-                ['foo' => 'bar']
-            ],
-            'no-match-without-leading-slash' => [
-                new Segment(':foo'),
-                '/bar/',
-                null,
-                null
-            ],
-            'no-match-with-trailing-slash' => [
-                new Segment('/:foo'),
-                '/bar/',
-                null,
-                null
-            ],
-            'offset-skips-beginning' => [
-                new Segment(':foo'),
-                '/bar',
-                1,
-                ['foo' => 'bar']
-            ],
-            'offset-enables-partial-matching' => [
-                new Segment('/:foo'),
-                '/bar/baz',
-                0,
-                ['foo' => 'bar']
-            ],
-            'match-overrides-default' => [
-                new Segment('/:foo', [], ['foo' => 'baz']),
-                '/bar',
-                null,
-                ['foo' => 'bar']
-            ],
-            'constraints-prevent-match' => [
-                new Segment('/:foo', ['foo' => '\d+']),
-                '/bar',
-                null,
-                null
-            ],
-            'constraints-allow-match' => [
-                new Segment('/:foo', ['foo' => '\d+']),
-                '/123',
-                null,
-                ['foo' => '123']
-            ],
-            'constraints-override-non-standard-delimiter' => [
-                new Segment('/:foo{-}/bar', ['foo' => '[^/]+']),
-                '/foo-bar/bar',
-                null,
-                ['foo' => 'foo-bar']
-            ],
-            'constraints-with-parantheses-dont-break-parameter-map' => [
-                new Segment('/:foo/:bar', ['foo' => '(bar)']),
-                '/bar/baz',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz']
-            ],
-            'simple-match-with-optional-parameter' => [
-                new Segment('/[:foo]', [], ['foo' => 'bar']),
-                '/',
-                null,
-                ['foo' => 'bar']
-            ],
-            'optional-parameter-is-ignored' => [
-                new Segment('/:foo[/:bar]'),
-                '/bar',
-                null,
-                ['foo' => 'bar']
-            ],
-            'optional-parameter-is-provided-with-default' => [
-                new Segment('/:foo[/:bar]', [], ['bar' => 'baz']),
-                '/bar',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz']
-            ],
-            'optional-parameter-is-consumed' => [
-                new Segment('/:foo[/:bar]'),
-                '/bar/baz',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz']
-            ],
-            'optional-group-is-discared-with-missing-parameter' => [
-                new Segment('/:foo[/:bar/:baz]', [], ['bar' => 'baz']),
-                '/bar',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz']
-            ],
-            'optional-group-within-optional-group-is-ignored' => [
-                new Segment('/:foo[/:bar[/:baz]]', [], ['bar' => 'baz', 'baz' => 'bat']),
-                '/bar',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz', 'baz' => 'bat']
-            ],
-            'non-standard-delimiter-before-parameter' => [
-                new Segment('/foo-:bar'),
-                '/foo-baz',
-                null,
-                ['bar' => 'baz']
-            ],
-            'non-standard-delimiter-between-parameters' => [
-                new Segment('/:foo{-}-:bar'),
-                '/bar-baz',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz']
-            ],
-            'non-standard-delimiter-before-optional-parameter' => [
-                new Segment('/:foo{-/}[-:bar]/:baz'),
-                '/bar-baz/bat',
-                null,
-                ['foo' => 'bar', 'bar' => 'baz', 'baz' => 'bat']
-            ],
-            'non-standard-delimiter-before-ignored-optional-parameter' => [
-                new Segment('/:foo{-/}[-:bar]/:baz'),
-                '/bar/bat',
-                null,
-                ['foo' => 'bar', 'baz' => 'bat']
-            ],
-            'parameter-with-dash-in-name' => [
-                new Segment('/:foo-bar'),
-                '/baz',
-                null,
-                ['foo-bar' => 'baz']
-            ],
-            'url-encoded-parameters-are-decoded' => [
-                new Segment('/:foo'),
-                '/foo%20bar',
-                null,
-                ['foo' => 'foo bar']
-            ],
-            'urlencode-flaws-corrected' => [
-                new Segment('/:foo'),
-                "/!$&'()*,-.:;=@_~+",
-                null,
-                ['foo' => "!$&'()*,-.:;=@_~+"]
-            ],
-            'empty-matches-are-replaced-with-defaults' => [
-                new Segment('/foo[/:bar]/baz-:baz', [], ['bar' => 'bar']),
-                '/foo/baz-baz',
-                null,
-                ['bar' => 'bar', 'baz' => 'baz']
-            ],
-        ];
+        $params = ['foo' => 'bar'];
+        yield 'simple match' => (new RouteTestDefinition(
+            new Segment('/:foo'),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        yield 'no match without leading slash' => (new RouteTestDefinition(
+            new Segment(':foo'),
+            new Uri('/bar/')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteFailure()
+            );
+
+        yield 'partial match with trailing slash' => (new RouteTestDefinition(
+            new Segment('/:foo'),
+            new Uri('/bar/')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch(['foo' => 'bar'], 0, 4)
+            );
+
+        $params = ['foo' => 'bar'];
+        yield 'offset skips beginning' => (new RouteTestDefinition(
+            new Segment(':foo'),
+            new Uri('/bar')
+        ))
+            ->usePathOffset(1)
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 1, 3)
+            );
+
+        $params = ['foo' => 'bar', 'baz' => 'qux'];
+        yield 'match merges default parameters' => (new RouteTestDefinition(
+            new Segment('/:foo', [], ['baz' => 'qux']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar'];
+        yield 'match overrides default parameters' => (new RouteTestDefinition(
+            new Segment('/:foo', [], ['foo' => 'baz']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        yield 'constraints prevent match' => (new RouteTestDefinition(
+            new Segment('/:foo', ['foo' => '\d+']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteFailure()
+            );
+
+        $params = ['foo' => '123'];
+        yield 'constraints allow match' => (new RouteTestDefinition(
+            new Segment('/:foo', ['foo' => '\d+']),
+            new Uri('/123')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'foo-bar'];
+        yield 'constraints override non standard delimiter' => (new RouteTestDefinition(
+            new Segment('/:foo{-}/bar', ['foo' => '[^/]+']),
+            new Uri('/foo-bar/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz'];
+        yield 'constraints with parentheses dont break parameter map' => (new RouteTestDefinition(
+            new Segment('/:foo/:bar', ['foo' => '(bar)']),
+            new Uri('/bar/baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        yield 'simple match with optional parameter' => (new RouteTestDefinition(
+            new Segment('/[:foo]', [], ['foo' => 'bar']),
+            new Uri('/')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch(['foo' => 'bar'])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch(['foo' => 'bar'], 0, 1)
+            );
+
+        yield 'optional parameter is ignored' => (new RouteTestDefinition(
+            new Segment('/:foo[/:baz]'),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch(['foo' => 'bar'])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch(['foo' => 'bar'], 0, 4)
+            );
+
+        $params = ['foo' => 'bar', 'bar' => 'baz'];
+        yield 'optional parameter is provided with default' => (new RouteTestDefinition(
+            new Segment('/:foo[/:bar]', [], ['bar' => 'baz']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz'];
+        yield 'optional parameter is consumed' => (new RouteTestDefinition(
+            new Segment('/:foo[/:bar]'),
+            new Uri('/bar/baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz'];
+        yield 'optional group is discared with missing parameter' => (new RouteTestDefinition(
+            new Segment('/:foo[/:bar/:baz]', [], ['bar' => 'baz']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz', 'baz' => 'bat'];
+        yield 'optional group within optional group is ignored' => (new RouteTestDefinition(
+            new Segment('/:foo[/:bar[/:baz]]', [], ['bar' => 'baz', 'baz' => 'bat']),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['bar' => 'baz'];
+        yield 'non standard delimiter before parameter' => (new RouteTestDefinition(
+            new Segment('/foo-:bar'),
+            new Uri('/foo-baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz'];
+        yield 'non standard delimiter between parameters' => (new RouteTestDefinition(
+            new Segment('/:foo{-}-:bar'),
+            new Uri('/bar-baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'bar' => 'baz', 'baz' => 'bat'];
+        yield 'non standard delimiter before optional parameter' => (new RouteTestDefinition(
+            new Segment('/:foo{-/}[-:bar]/:baz'),
+            new Uri('/bar-baz/bat')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'bar', 'baz' => 'bat'];
+        yield 'non standard delimiter before ignored optional parameter' => (new RouteTestDefinition(
+            new Segment('/:foo{-/}[-:bar]/:baz'),
+            new Uri('/bar/bat')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo-bar' => 'baz'];
+        yield 'parameter with dash in name' => (new RouteTestDefinition(
+            new Segment('/:foo-bar'),
+            new Uri('/baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => 'foo bar'];
+        yield 'url encoded parameters are decoded' => (new RouteTestDefinition(
+            new Segment('/:foo'),
+            new Uri('/foo%20bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['foo' => "!$&'()*,-.:;=@_~+"];
+        yield 'urlencode flaws corrected' => (new RouteTestDefinition(
+            new Segment('/:foo'),
+            new Uri("/!$&'()*,-.:;=@_~+")
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        $params = ['bar' => 'bar', 'baz' => 'baz'];
+        yield 'empty matches are replaced with defaults' => (new RouteTestDefinition(
+            new Segment('/foo[/:bar]/baz-:baz', [], ['bar' => 'bar']),
+            new Uri('/foo/baz-baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
+
+        yield from $this->getL10nRouteTestDefinitions();
     }
 
-    public function l10nRouteProvider()
+    public function getL10nRouteTestDefinitions() : iterable
     {
-        $this->markTestIncomplete(
-            'Translation tests need to be updated once zend-i18n is updated for zend-servicemanager v3'
-        );
-
         // @codingStandardsIgnoreStart
         $translator = new Translator();
         $translator->setLocale('en-US');
-        $enLoader     = $this->getMock(FileLoaderInterface::class);
-        $deLoader     = $this->getMock(FileLoaderInterface::class);
-        $domainLoader = $this->getMock(FileLoaderInterface::class);
+        $enLoader = $this->createMock(FileLoaderInterface::class);
+        $deLoader = $this->createMock(FileLoaderInterface::class);
+        $domainLoader = $this->createMock(FileLoaderInterface::class);
         $enLoader->expects($this->any())->method('load')->willReturn(new TextDomain(['fw' => 'framework']));
         $deLoader->expects($this->any())->method('load')->willReturn(new TextDomain(['fw' => 'baukasten']));
         $domainLoader->expects($this->any())->method('load')->willReturn(new TextDomain(['fw' => 'fw-alternative']));
-        $translator->getPluginManager()->setService('test-en',     $enLoader);
-        $translator->getPluginManager()->setService('test-de',     $deLoader);
+        $translator->getPluginManager()->setService('test-en', $enLoader);
+        $translator->getPluginManager()->setService('test-de', $deLoader);
         $translator->getPluginManager()->setService('test-domain', $domainLoader);
         $translator->addTranslationFile('test-en', null, 'default', 'en-US');
         $translator->addTranslationFile('test-de', null, 'default', 'de-DE');
         $translator->addTranslationFile('test-domain', null, 'alternative', 'en-US');
         // @codingStandardsIgnoreEnd
 
-        return [
-            'translate-with-default-locale' => [
-                new Segment('/{fw}', [], []),
-                '/framework',
-                null,
-                [],
-                ['translator' => $translator]
-            ],
-            'translate-with-specific-locale' => [
-                new Segment('/{fw}', [], []),
-                '/baukasten',
-                null,
-                [],
-                ['translator' => $translator, 'locale' => 'de-DE']
-            ],
-            'translate-uses-message-id-as-fallback' => [
-                new Segment('/{fw}', [], []),
-                '/fw',
-                null,
-                [],
-                ['translator' => $translator, 'locale' => 'fr-FR']
-            ],
-            'translate-with-specific-text-domain' => [
-                new Segment('/{fw}', [], []),
-                '/fw-alternative',
-                null,
-                [],
-                ['translator' => $translator, 'text_domain' => 'alternative']
-            ],
-        ];
+        yield 'translate with default locale' => (new RouteTestDefinition(
+            new Segment('/{fw}', [], []),
+            new Uri('/framework')
+        ))
+            ->useMatchOptions(['translator' => $translator])
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 10)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useOptionsForAssemble(['translator' => $translator]);
+
+        yield 'translate with default locale' => (new RouteTestDefinition(
+            new Segment('/{fw}', [], []),
+            new Uri('/baukasten')
+        ))
+            ->useMatchOptions(['translator' => $translator, 'locale' => 'de-DE'])
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 10)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useOptionsForAssemble(['translator' => $translator, 'locale' => 'de-DE']);
+
+        yield 'translate uses message id as fallback' => (new RouteTestDefinition(
+            new Segment('/{fw}', [], []),
+            new Uri('/fw')
+        ))
+            ->useMatchOptions(['translator' => $translator, 'locale' => 'fr-FR'])
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 10)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useOptionsForAssemble(['translator' => $translator, 'locale' => 'fr-FR']);
+
+        yield 'translate with specific text domain' => (new RouteTestDefinition(
+            new Segment('/{fw}', [], []),
+            new Uri('/fw-alternative')
+        ))
+            ->useMatchOptions(['translator' => $translator, 'text_domain' => 'alternative'])
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch([])
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch([], 0, 10)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useOptionsForAssemble(['translator' => $translator, 'text_domain' => 'alternative']);
     }
 
-    public static function parseExceptionsProvider()
+    public static function parseExceptionsProvider() : array
     {
         return [
             'unbalanced-brackets' => [
                 '[',
                 RuntimeException::class,
-                'Found unbalanced brackets'
+                'Found unbalanced brackets',
             ],
             'closing-bracket-without-opening-bracket' => [
                 ']',
                 RuntimeException::class,
-                'Found closing bracket without matching opening bracket'
+                'Found closing bracket without matching opening bracket',
             ],
             'empty-parameter-name' => [
                 ':',
                 RuntimeException::class,
-                'Found empty parameter name'
+                'Found empty parameter name',
             ],
             'translated-literal-without-closing-backet' => [
                 '{test',
                 RuntimeException::class,
-                'Translated literal missing closing bracket'
+                'Translated literal missing closing bracket',
             ],
         ];
     }
 
     /**
-     * @dataProvider routeProvider
-     * @param        Segment $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     * @param        array   $options
-     */
-    public function testMatching(Segment $route, $path, $offset, array $params = null, array $options = [])
-    {
-        $request = new Request();
-        $request->setUri('http://example.com' . $path);
-        $match = $route->match($request, $offset, $options);
-
-        if ($params === null) {
-            $this->assertNull($match);
-        } else {
-            $this->assertInstanceOf(RouteMatch::class, $match);
-
-            if ($offset === null) {
-                $this->assertEquals(strlen($path), $match->getLength());
-            }
-
-            foreach ($params as $key => $value) {
-                $this->assertEquals($value, $match->getParam($key));
-            }
-        }
-    }
-
-    /**
-     * @dataProvider routeProvider
-     * @param        Segment $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     * @param        array   $options
-     */
-    public function testAssembling(Segment $route, $path, $offset, array $params = null, array $options = [])
-    {
-        if ($params === null) {
-            // Data which will not match are not tested for assembling.
-            return;
-        }
-
-        $result = $route->assemble($params, $options);
-
-        if ($offset !== null) {
-            $this->assertEquals($offset, strpos($path, $result, $offset));
-        } else {
-            $this->assertEquals($path, $result);
-        }
-    }
-
-    /**
-     * @dataProvider l10nRouteProvider
-     * @param        Segment $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     * @param        array   $options
-     */
-    public function testMatchingWithL10n(Segment $route, $path, $offset, array $params = null, array $options = [])
-    {
-        $request = new Request();
-        $request->setUri('http://example.com' . $path);
-        $match = $route->match($request, $offset, $options);
-
-        if ($params === null) {
-            $this->assertNull($match);
-        } else {
-            $this->assertInstanceOf(RouteMatch::class, $match);
-
-            if ($offset === null) {
-                $this->assertEquals(strlen($path), $match->getLength());
-            }
-
-            foreach ($params as $key => $value) {
-                $this->assertEquals($value, $match->getParam($key));
-            }
-        }
-    }
-
-    /**
-     * @dataProvider l10nRouteProvider
-     * @param        Segment $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     * @param        array   $options
-     */
-    public function testAssemblingWithL10n(Segment $route, $path, $offset, array $params = null, array $options = [])
-    {
-        if ($params === null) {
-            // Data which will not match are not tested for assembling.
-            return;
-        }
-
-        $result = $route->assemble($params, $options);
-
-        if ($offset !== null) {
-            $this->assertEquals($offset, strpos($path, $result, $offset));
-        } else {
-            $this->assertEquals($path, $result);
-        }
-    }
-
-    /**
      * @dataProvider parseExceptionsProvider
-     * @param        string $route
-     * @param        string $exceptionName
-     * @param        string $exceptionMessage
      */
-    public function testParseExceptions($route, $exceptionName, $exceptionMessage)
+    public function testParseExceptions(string $route, string $exceptionName, string $exceptionMessage)
     {
         $this->expectException($exceptionName);
         $this->expectExceptionMessage($exceptionMessage);
@@ -378,20 +474,22 @@ class SegmentTest extends TestCase
 
     public function testAssemblingWithMissingParameterInRoot()
     {
+        $uri = new Uri();
         $route = new Segment('/:foo');
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Missing parameter "foo"');
-        $route->assemble();
+        $route->assemble($uri);
     }
 
     public function testTranslatedAssemblingThrowsExceptionWithoutTranslator()
     {
+        $uri = new Uri();
         $route = new Segment('/{foo}');
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('No translator provided');
-        $route->assemble();
+        $route->assemble($uri);
     }
 
     public function testTranslatedMatchingThrowsExceptionWithoutTranslator()
@@ -400,23 +498,24 @@ class SegmentTest extends TestCase
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('No translator provided');
-        $route->match(new Request());
-    }
-
-    public function testNoMatchWithoutUriMethod()
-    {
-        $route   = new Segment('/foo');
-        $request = new BaseRequest();
-
-        $this->assertNull($route->match($request));
+        $route->match(new ServerRequest());
     }
 
     public function testAssemblingWithExistingChild()
     {
+        $uri = new Uri();
         $route = new Segment('/[:foo]', [], ['foo' => 'bar']);
-        $path = $route->assemble([], ['has_child' => true]);
+        $path = $route->assemble($uri, [], ['has_child' => true]);
 
         $this->assertEquals('/bar', $path);
+    }
+
+    public function testGetAssembledParams()
+    {
+        $uri = new Uri();
+        $route = new Segment('/:foo');
+        $route->assemble($uri, ['foo' => 'bar', 'baz' => 'bat']);
+        $this->assertEquals(['foo'], $route->getLastAssembledParams());
     }
 
     public function testFactory()
@@ -425,11 +524,11 @@ class SegmentTest extends TestCase
         $tester->testFactory(
             Segment::class,
             [
-                'route' => 'Missing "route" in options array'
+                'route' => 'Missing "route" in options array',
             ],
             [
-                'route'       => '/:foo[/:bar{-}]',
-                'constraints' => ['foo' => 'bar']
+                'route' => '/:foo[/:bar{-}]',
+                'constraints' => ['foo' => 'bar'],
             ]
         );
     }
@@ -439,46 +538,54 @@ class SegmentTest extends TestCase
         // verify all characters which don't absolutely require encoding pass through match unchanged
         // this includes every character other than #, %, / and ?
         $raw = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`-=[]\\;\',.~!@$^&*()_+{}|:"<>';
-        $request = new Request();
-        $request->setUri('http://example.com/' . $raw);
-        $route   = new Segment('/:foo');
-        $match   = $route->match($request);
+        $request = new ServerRequest([], [], new Uri('http://example.com/' . $raw));
+        $route = new Segment('/:foo');
+        $result = $route->match($request);
 
-        $this->assertSame($raw, $match->getParam('foo'));
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame($raw, $result->getMatchedParams()['foo']);
     }
 
     public function testEncodedDecode()
     {
         // @codingStandardsIgnoreStart
         // every character
-        $in  = '%61%62%63%64%65%66%67%68%69%6a%6b%6c%6d%6e%6f%70%71%72%73%74%75%76%77%78%79%7a%41%42%43%44%45%46%47%48%49%4a%4b%4c%4d%4e%4f%50%51%52%53%54%55%56%57%58%59%5a%30%31%32%33%34%35%36%37%38%39%60%2d%3d%5b%5d%5c%3b%27%2c%2e%2f%7e%21%40%23%24%25%5e%26%2a%28%29%5f%2b%7b%7d%7c%3a%22%3c%3e%3f';
+        $in = '%61%62%63%64%65%66%67%68%69%6a%6b%6c%6d%6e%6f%70%71%72%73%74%75%76%77%78%79%7a%41%42%43%44%45%46%47%48%49%4a%4b%4c%4d%4e%4f%50%51%52%53%54%55%56%57%58%59%5a%30%31%32%33%34%35%36%37%38%39%60%2d%3d%5b%5d%5c%3b%27%2c%2e%2f%7e%21%40%23%24%25%5e%26%2a%28%29%5f%2b%7b%7d%7c%3a%22%3c%3e%3f';
         $out = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`-=[]\\;\',./~!@#$%^&*()_+{}|:"<>?';
         // @codingStandardsIgnoreEnd
 
-        $request = new Request();
-        $request->setUri('http://example.com/' . $in);
-        $route   = new Segment('/:foo');
-        $match   = $route->match($request);
+        $request = new ServerRequest([], [], new Uri('http://example.com/' . $in));
+        $route = new Segment('/:foo');
+        $result = $route->match($request);
 
-        $this->assertSame($out, $match->getParam('foo'));
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame($out, $result->getMatchedParams()['foo']);
     }
 
     public function testEncodeCache()
     {
+        $uri = new Uri();
         $params1 = ['p1' => 6.123, 'p2' => 7];
-        $uri1 = 'example.com/'.implode('/', $params1);
+        $uri1 = 'example.com/' . implode('/', $params1);
         $params2 = ['p1' => 6, 'p2' => 'test'];
-        $uri2 = 'example.com/'.implode('/', $params2);
+        $uri2 = 'example.com/' . implode('/', $params2);
 
         $route = new Segment('example.com/:p1/:p2');
-        $request = new Request();
-
-        $request->setUri($uri1);
+        $request = new ServerRequest([], [], new Uri($uri1));
         $route->match($request);
-        $this->assertSame($uri1, $route->assemble($params1));
+        $this->assertSame($uri1, $route->assemble($uri, $params1)->getPath());
 
-        $request->setUri($uri2);
+        $request = $request->withUri(new Uri($uri2));
         $route->match($request);
-        $this->assertSame($uri2, $route->assemble($params2));
+        $this->assertSame($uri2, $route->assemble($uri, $params2)->getPath());
+    }
+
+    public function testRejectsNegativePathOffset()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path offset cannot be negative');
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Segment('/foo');
+        $route->partialMatch($request->reveal(), -1);
     }
 }
