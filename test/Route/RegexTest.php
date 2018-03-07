@@ -10,130 +10,114 @@ declare(strict_types=1);
 namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
-use Zend\Http\Request;
+use Psr\Http\Message\ServerRequestInterface;
+use Zend\Diactoros\ServerRequest;
+use Zend\Diactoros\Uri;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteResult;
 use Zend\Router\Route\Regex;
-use Zend\Router\Route\RouteMatch;
-use Zend\Stdlib\Request as BaseRequest;
+use Zend\Router\RouteResult;
 use ZendTest\Router\FactoryTester;
+use ZendTest\Router\Route\TestAsset\RouteTestDefinition;
 
 /**
  * @covers \Zend\Router\Route\Regex
  */
 class RegexTest extends TestCase
 {
-    public static function routeProvider()
+    use PartialRouteTestTrait;
+    use RouteTestTrait;
+
+    public function getRouteTestDefinitions() : iterable
     {
-        return [
-            'simple-match' => [
-                new Regex('/(?<foo>[^/]+)', '/%foo%'),
-                '/bar',
-                null,
-                ['foo' => 'bar']
-            ],
-            'no-match-without-leading-slash' => [
-                new Regex('(?<foo>[^/]+)', '%foo%'),
-                '/bar',
-                null,
-                null
-            ],
-            'no-match-with-trailing-slash' => [
-                new Regex('/(?<foo>[^/]+)', '/%foo%'),
-                '/bar/',
-                null,
-                null
-            ],
-            'offset-skips-beginning' => [
-                new Regex('(?<foo>[^/]+)', '%foo%'),
-                '/bar',
-                1,
-                ['foo' => 'bar']
-            ],
-            'offset-enables-partial-matching' => [
-                new Regex('/(?<foo>[^/]+)', '/%foo%'),
-                '/bar/baz',
-                0,
-                ['foo' => 'bar']
-            ],
-            'url-encoded-parameters-are-decoded' => [
-                new Regex('/(?<foo>[^/]+)', '/%foo%'),
-                '/foo%20bar',
-                null,
-                ['foo' => 'foo bar']
-            ],
-            'empty-matches-are-replaced-with-defaults' => [
-                new Regex('/foo(?:/(?<bar>[^/]+))?/baz-(?<baz>[^/]+)', '/foo/baz-%baz%', ['bar' => 'bar']),
-                '/foo/baz-baz',
-                null,
-                ['bar' => 'bar', 'baz' => 'baz']
-            ],
-        ];
-    }
+        $params = ['foo' => 'bar'];
+        yield 'simple match' => (new RouteTestDefinition(
+            new Regex('/(?<foo>[^/]+)', '/%foo%'),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 4)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
 
-    /**
-     * @dataProvider routeProvider
-     * @param        Regex   $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     */
-    public function testMatching(Regex $route, $path, $offset, array $params = null)
-    {
-        $request = new Request();
-        $request->setUri('http://example.com' . $path);
-        $match = $route->match($request, $offset);
+        yield 'no match without leading slash' => (new RouteTestDefinition(
+            new Regex('(?<foo>[^/]+)', '%foo%'),
+            new Uri('/bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteFailure()
+            );
 
-        if ($params === null) {
-            $this->assertNull($match);
-        } else {
-            $this->assertInstanceOf(RouteMatch::class, $match);
+        yield 'only partial match with trailing slash' => (new RouteTestDefinition(
+            new Regex('/(?<foo>[^/]+)', '/%foo%'),
+            new Uri('/bar/')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteFailure()
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch(['foo' => 'bar'], 0, 4)
+            );
 
-            if ($offset === null) {
-                $this->assertEquals(strlen($path), $match->getLength());
-            }
+        $params = ['foo' => 'bar'];
+        yield 'offset skips beginning' => (new RouteTestDefinition(
+            new Regex('(?<foo>[^/]+)', '%foo%'),
+            new Uri('/bar')
+        ))
+            ->usePathOffset(1)
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 1, 3)
+            )
+            ->shouldAssembleAndExpectResult(new Uri('bar'))
+            ->useParamsForAssemble($params);
 
-            foreach ($params as $key => $value) {
-                $this->assertEquals($value, $match->getParam($key));
-            }
-        }
-    }
+        $params = ['foo' => 'foo bar'];
+        yield 'url encoded parameters are decoded' => (new RouteTestDefinition(
+            new Regex('/(?<foo>[^/]+)', '/%foo%'),
+            new Uri('/foo%20bar')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 10)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
 
-    /**
-     * @dataProvider routeProvider
-     * @param        Regex   $route
-     * @param        string  $path
-     * @param        int     $offset
-     * @param        array   $params
-     */
-    public function testAssembling(Regex $route, $path, $offset, array $params = null)
-    {
-        if ($params === null) {
-            // Data which will not match are not tested for assembling.
-            return;
-        }
-
-        $result = $route->assemble($params);
-
-        if ($offset !== null) {
-            $this->assertEquals($offset, strpos($path, $result, $offset));
-        } else {
-            $this->assertEquals($path, $result);
-        }
-    }
-
-    public function testNoMatchWithoutUriMethod()
-    {
-        $route   = new Regex('/foo', '/foo');
-        $request = new BaseRequest();
-
-        $this->assertNull($route->match($request));
+        $params = ['bar' => 'bar', 'baz' => 'baz'];
+        yield 'empty matches are replaced with defaults' => (new RouteTestDefinition(
+            new Regex('/foo(?:/(?<bar>[^/]+))?/baz-(?<baz>[^/]+)', '/foo/baz-%baz%', ['bar' => 'bar']),
+            new Uri('/foo/baz-baz')
+        ))
+            ->expectMatchResult(
+                RouteResult::fromRouteMatch($params)
+            )
+            ->expectPartialMatchResult(
+                PartialRouteResult::fromRouteMatch($params, 0, 12)
+            )
+            ->shouldAssembleAndExpectResultSameAsUriForMatching()
+            ->useParamsForAssemble($params);
     }
 
     public function testGetAssembledParams()
     {
+        $uri = new Uri();
         $route = new Regex('/(?<foo>.+)', '/%foo%');
-        $route->assemble(['foo' => 'bar', 'baz' => 'bat']);
+        $route->assemble($uri, ['foo' => 'bar', 'baz' => 'bat']);
 
-        $this->assertEquals(['foo'], $route->getAssembledParams());
+        $this->assertEquals(['foo'], $route->getLastAssembledParams());
+        $this->assertEquals($route->getLastAssembledParams(), $route->getAssembledParams());
     }
 
     public function testFactory()
@@ -143,11 +127,11 @@ class RegexTest extends TestCase
             Regex::class,
             [
                 'regex' => 'Missing "regex" in options array',
-                'spec'  => 'Missing "spec" in options array'
+                'spec'  => 'Missing "spec" in options array',
             ],
             [
                 'regex' => '/foo',
-                'spec'  => '/foo'
+                'spec'  => '/foo',
             ]
         );
     }
@@ -157,12 +141,12 @@ class RegexTest extends TestCase
         // verify all characters which don't absolutely require encoding pass through match unchanged
         // this includes every character other than #, %, / and ?
         $raw = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`-=[]\\;\',.~!@$^&*()_+{}|:"<>';
-        $request = new Request();
-        $request->setUri('http://example.com/' . $raw);
-        $route   = new Regex('/(?<foo>[^/]+)', '/%foo%');
-        $match   = $route->match($request);
+        $request = new ServerRequest([], [], new Uri('http://example.com/' . $raw));
+        $route = new Regex('/(?<foo>[^/]+)', '/%foo%');
+        $result = $route->match($request);
 
-        $this->assertSame($raw, $match->getParam('foo'));
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame($raw, $result->getMatchedParams()['foo']);
     }
 
     public function testEncodedDecode()
@@ -173,11 +157,19 @@ class RegexTest extends TestCase
         $out = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`-=[]\\;\',./~!@#$%^&*()_+{}|:"<>?';
         // @codingStandardsIgnoreEnd
 
-        $request = new Request();
-        $request->setUri('http://example.com/' . $in);
-        $route   = new Regex('/(?<foo>[^/]+)', '/%foo%');
-        $match   = $route->match($request);
+        $request = new ServerRequest([], [], new Uri('http://example.com/' . $in));
+        $route = new Regex('/(?<foo>[^/]+)', '/%foo%');
+        $result = $route->match($request);
 
-        $this->assertSame($out, $match->getParam('foo'));
+        $this->assertSame($out, $result->getMatchedParams()['foo']);
+    }
+
+    public function testRejectsNegativePathOffset()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path offset cannot be negative');
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Regex('/foo', '/%foo%');
+        $route->partialMatch($request->reveal(), -1);
     }
 }
