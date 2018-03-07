@@ -9,26 +9,43 @@ declare(strict_types=1);
 
 namespace Zend\Router\Route;
 
-use ArrayObject;
-use Traversable;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
 use Zend\Router\Exception;
-use Zend\Router\PriorityList;
-use Zend\Router\RoutePluginManager;
+use Zend\Router\Exception\InvalidArgumentException;
+use Zend\Router\PartialRouteInterface;
+use Zend\Router\RouteInterface;
+use Zend\Router\RouteResult;
+use Zend\Router\RouteStackInterface;
 use Zend\Router\TreeRouteStack;
 use Zend\Stdlib\ArrayUtils;
-use Zend\Stdlib\RequestInterface as Request;
+
+use function array_diff_key;
+use function array_flip;
+use function array_intersect;
+use function array_merge;
+use function is_array;
 
 /**
  * Part route.
  */
-class Part extends TreeRouteStack implements RouteInterface
+class Part implements RouteStackInterface
 {
+    use PartialRouteTrait;
+
     /**
      * RouteInterface to match.
      *
-     * @var RouteInterface
+     * @var PartialRouteInterface
      */
-    protected $route;
+    private $route;
+
+    /**
+     * Child routes.
+     *
+     * @var RouteStackInterface
+     */
+    private $childRoutes;
 
     /**
      * Whether the route may terminate.
@@ -38,199 +55,213 @@ class Part extends TreeRouteStack implements RouteInterface
     protected $mayTerminate;
 
     /**
-     * Child routes.
-     *
-     * @var mixed
-     */
-    protected $childRoutes;
-
-    /**
      * Create a new part route.
-     *
-     * @param  mixed              $route
-     * @param  bool               $mayTerminate
-     * @param  RoutePluginManager $routePlugins
-     * @param  array|null         $childRoutes
-     * @param  ArrayObject|null   $prototypes
-     * @throws Exception\InvalidArgumentException
      */
-    public function __construct(
-        $route,
-        $mayTerminate,
-        RoutePluginManager $routePlugins,
-        array $childRoutes = null,
-        ArrayObject $prototypes = null
-    ) {
-        $this->routePluginManager = $routePlugins;
-
-        if (! $route instanceof RouteInterface) {
-            $route = $this->routeFromArray($route);
-        }
-
-        if ($route instanceof self) {
-            throw new Exception\InvalidArgumentException('Base route may not be a part route');
-        }
-
-        $this->route        = $route;
+    public function __construct(PartialRouteInterface $route, RouteStackInterface $childRoutes, bool $mayTerminate)
+    {
+        $this->route = $route;
+        $this->childRoutes = $childRoutes;
         $this->mayTerminate = $mayTerminate;
-        $this->childRoutes  = $childRoutes;
-        $this->prototypes   = $prototypes;
-        $this->routes       = new PriorityList();
     }
 
     /**
-     * factory(): defined by RouteInterface interface.
-     *
-     * @see    \Zend\Router\RouteInterface::factory()
-     * @param  mixed $options
-     * @return Part
-     * @throws Exception\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
-    public static function factory($options = [])
+    public static function factory(iterable $options = []) : self
     {
-        if ($options instanceof Traversable) {
+        if (! is_array($options)) {
             $options = ArrayUtils::iteratorToArray($options);
-        } elseif (! is_array($options)) {
-            throw new Exception\InvalidArgumentException(sprintf(
-                '%s expects an array or Traversable set of options',
-                __METHOD__
-            ));
         }
 
         if (! isset($options['route'])) {
-            throw new Exception\InvalidArgumentException('Missing "route" in options array');
+            throw new InvalidArgumentException('Missing "route" in options array');
         }
 
-        if (! isset($options['route_plugins'])) {
-            throw new Exception\InvalidArgumentException('Missing "route_plugins" in options array');
+        if (! isset($options['child_routes']) || ! $options['child_routes']) {
+            $options['child_routes'] = [];
         }
 
-        if (! isset($options['prototypes'])) {
-            $options['prototypes'] = null;
+        if (is_array($options['child_routes'])) {
+            $childRoutes = new TreeRouteStack();
+            $childRoutes->addRoutes($options['child_routes']);
+            $options['child_routes'] = $childRoutes;
         }
 
         if (! isset($options['may_terminate'])) {
             $options['may_terminate'] = false;
         }
 
-        if (! isset($options['child_routes']) || ! $options['child_routes']) {
-            $options['child_routes'] = null;
-        }
-
-        if ($options['child_routes'] instanceof Traversable) {
-            $options['child_routes'] = ArrayUtils::iteratorToArray($options['child_routes']);
-        }
-
         return new static(
             $options['route'],
-            $options['may_terminate'],
-            $options['route_plugins'],
             $options['child_routes'],
-            $options['prototypes']
+            $options['may_terminate']
         );
     }
 
     /**
-     * match(): defined by RouteInterface interface.
+     * Match a given request.
      *
-     * @see    \Zend\Router\RouteInterface::match()
-     * @param  Request      $request
-     * @param  integer|null $pathOffset
-     * @param  array        $options
-     * @return RouteMatch|null
+     * @throws InvalidArgumentException on negative path offset
      */
-    public function match(Request $request, $pathOffset = null, array $options = [])
+    public function match(Request $request, int $pathOffset = 0, array $options = []) : RouteResult
     {
-        if ($pathOffset === null) {
-            $pathOffset = 0;
+        if ($pathOffset < 0) {
+            throw new InvalidArgumentException('Path offset cannot be negative');
+        }
+        $partialResult = $this->route->partialMatch($request, $pathOffset, $options);
+
+        // continue matching for method failure to allow precise method list
+        if ($partialResult->isFailure() && ! $partialResult->isMethodFailure()) {
+            return RouteResult::fromRouteFailure();
         }
 
-        $match = $this->route->match($request, $pathOffset, $options);
-
-        if ($match !== null && method_exists($request, 'getUri')) {
-            if ($this->childRoutes !== null) {
-                $this->addRoutes($this->childRoutes);
-                $this->childRoutes = null;
+        if ($this->mayTerminate && $partialResult->isFullPathMatch($request->getUri())) {
+            // we get complete list of allowed methods on method failure. Child
+            // routes cannot expand it, so no reason to try to gather allowed
+            // methods for them
+            if ($partialResult->isMethodFailure()) {
+                return RouteResult::fromMethodFailure($partialResult->getAllowedMethods());
             }
-
-            $nextOffset = $pathOffset + $match->getLength();
-
-            $uri        = $request->getUri();
-            $pathLength = strlen($uri->getPath());
-
-            if ($this->mayTerminate && $nextOffset === $pathLength) {
-                return $match;
-            }
-
-            if (isset($options['translator'])
-                && ! isset($options['locale'])
-                && null !== ($locale = $match->getParam('locale', null))
-            ) {
-                $options['locale'] = $locale;
-            }
-
-            foreach ($this->routes as $name => $route) {
-                if (($subMatch = $route->match($request, $nextOffset, $options)) instanceof RouteMatch) {
-                    if ($match->getLength() + $subMatch->getLength() + $pathOffset === $pathLength) {
-                        return $match->merge($subMatch)->setMatchedRouteName($name);
-                    }
-                }
-            }
+            // We got full match, our work here is done
+            return RouteResult::fromRouteMatch(
+                $partialResult->getMatchedParams()
+            );
         }
 
-        return;
+        // pass matched params to child routes.
+        // Could be used for eg obtaining locale from matched parameters from parent routes.
+        if ($partialResult->isSuccess()) {
+            $options['parent_match_params'] = $options['parent_match_params'] ?? [];
+            $options['parent_match_params'] += $partialResult->getMatchedParams();
+        }
+
+        // we continue matching only to gather allowed methods. Force
+        // method routes to fail
+        if ($partialResult->isMethodFailure()) {
+            $options[Method::OPTION_FORCE_METHOD_FAILURE] = true;
+        }
+
+        $nextOffset = $pathOffset + $partialResult->getMatchedPathLength();
+
+        $childResult = $this->childRoutes->match($request, $nextOffset, $options);
+
+        if ($partialResult->isSuccess() && $childResult->isSuccess()) {
+            return $childResult->withMatchedParams(
+                array_merge($partialResult->getMatchedParams(), $childResult->getMatchedParams())
+            );
+        }
+
+        if ($childResult->isMethodFailure() && $partialResult->isMethodFailure()) {
+            $methods = array_intersect(
+                $partialResult->getAllowedMethods(),
+                $childResult->getAllowedMethods()
+            );
+            if (empty($methods)) {
+                return RouteResult::fromRouteFailure();
+            }
+            return RouteResult::fromMethodFailure($methods);
+        }
+
+        if ($partialResult->isMethodFailure() && $childResult->isSuccess()) {
+            return RouteResult::fromMethodFailure(
+                $partialResult->getAllowedMethods()
+            );
+        }
+
+        if ($childResult->isMethodFailure()) {
+            $parentMethods = $partialResult->getMatchedAllowedMethods();
+            $methods = $childResult->getAllowedMethods();
+            if (! empty($parentMethods)) {
+                $methods = array_intersect(
+                    $parentMethods,
+                    $childResult->getAllowedMethods()
+                );
+            }
+            return RouteResult::fromMethodFailure($methods);
+        }
+
+        return RouteResult::fromRouteFailure();
     }
 
     /**
-     * assemble(): Defined by RouteInterface interface.
+     * Assemble uri for the route.
      *
-     * @see    \Zend\Router\RouteInterface::assemble()
-     * @param  array $params
-     * @param  array $options
-     * @return mixed
-     * @throws Exception\RuntimeException
+     * @throws Exception\RuntimeException when trying to assemble part route without
+     *     child route name, if part route can't terminate
      */
-    public function assemble(array $params = [], array $options = [])
+    public function assemble(UriInterface $uri, array $params = [], array $options = []) : UriInterface
     {
-        if ($this->childRoutes !== null) {
-            $this->addRoutes($this->childRoutes);
-            $this->childRoutes = null;
-        }
+        $partOptions = $options;
+        $partOptions['has_child'] = isset($options['name']);
+        unset($partOptions['name']);
 
-        $options['has_child'] = (isset($options['name']));
-
-        if (isset($options['translator']) && ! isset($options['locale']) && isset($params['locale'])) {
-            $options['locale'] = $params['locale'];
-        }
-
-        $path   = $this->route->assemble($params, $options);
-        $params = array_diff_key($params, array_flip($this->route->getAssembledParams()));
+        $uri = $this->route->assemble($uri, $params, $partOptions);
+        $params = array_diff_key($params, array_flip($this->route->getLastAssembledParams()));
 
         if (! isset($options['name'])) {
             if (! $this->mayTerminate) {
                 throw new Exception\RuntimeException('Part route may not terminate');
             } else {
-                return $path;
+                return $uri;
             }
         }
 
-        unset($options['has_child']);
-        $options['only_return_path'] = true;
-        $path .= parent::assemble($params, $options);
-
-        return $path;
+        return $this->childRoutes->assemble($uri, $params, $options);
     }
 
     /**
-     * getAssembledParams(): defined by RouteInterface interface.
-     *
-     * @see    RouteInterface::getAssembledParams
-     * @return array
+     * Add a route to the stack.
      */
-    public function getAssembledParams()
+    public function addRoute(string $name, RouteInterface $route, int $priority = null) : void
     {
-        // Part routes may not occur as base route of other part routes, so we
-        // don't have to return anything here.
-        return [];
+        $this->childRoutes->addRoute($name, $route, $priority);
+    }
+
+    /**
+     * Add multiple routes to the stack.
+     */
+    public function addRoutes(iterable $routes) : void
+    {
+        $this->childRoutes->addRoutes($routes);
+    }
+
+    /**
+     * Remove a route from the stack.
+     */
+    public function removeRoute(string $name) : void
+    {
+        $this->childRoutes->removeRoute($name);
+    }
+
+    /**
+     * Remove all routes from the stack and set new ones.
+     */
+    public function setRoutes(iterable $routes) : void
+    {
+        $this->childRoutes->setRoutes($routes);
+    }
+
+    /**
+     * Get the added routes
+     */
+    public function getRoutes() : array
+    {
+        return $this->childRoutes->getRoutes();
+    }
+
+    /**
+     * Check if a route with a specific name exists
+     */
+    public function hasRoute(string $name) : bool
+    {
+        return $this->childRoutes->hasRoute($name);
+    }
+
+    /**
+     * Get a route by name
+     */
+    public function getRoute(string $name) : ?RouteInterface
+    {
+        return $this->childRoutes->getRoute($name);
     }
 }
