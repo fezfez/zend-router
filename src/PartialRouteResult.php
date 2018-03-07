@@ -10,12 +10,14 @@ declare(strict_types=1);
 namespace Zend\Router;
 
 use Psr\Http\Message\UriInterface;
-use Zend\Router\Exception\DomainException;
+use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
 
 use function array_change_key_case;
 use function array_flip;
 use function array_keys;
+use function sprintf;
+use function strlen;
 
 use const CASE_UPPER;
 
@@ -41,7 +43,7 @@ final class PartialRouteResult
     /**
      * Matched route name.
      *
-     * @var string|null
+     * @var null|string
      */
     private $matchedRouteName;
 
@@ -56,33 +58,45 @@ final class PartialRouteResult
     private $pathOffset = 0;
 
     /**
+     * @var null|string[]
+     */
+    private $matchedAllowedMethods;
+
+    /**
      * Create successful routing result
+     *
+     * @throws InvalidArgumentException
      */
     public static function fromRouteMatch(
         array $matchedParams,
         int $pathOffset,
         int $matchedPathLength,
-        string $routeName = null
-    ) : PartialRouteResult {
+        string $routeName = null,
+        array $allowedMethods = null
+    ) : self {
         if ($pathOffset < 0) {
-            throw new DomainException('Path offset cannot be negative');
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
         if ($matchedPathLength < 0) {
-            throw new DomainException('Matched path length cannot be negative');
+            throw new InvalidArgumentException('Matched path length cannot be negative');
         }
+
         $result = new self();
         $result->success = true;
         $result->matchedParams = $matchedParams;
         $result->matchedRouteName = $routeName;
         $result->pathOffset = $pathOffset;
         $result->matchedPathLength = $matchedPathLength;
+        if (! empty($allowedMethods)) {
+            $result->setMatchedAllowedMethods($allowedMethods);
+        }
         return $result;
     }
 
     /**
      * Create failed routing result
      */
-    public static function fromRouteFailure() : PartialRouteResult
+    public static function fromRouteFailure() : self
     {
         $result = new self();
         $result->success = false;
@@ -92,20 +106,22 @@ final class PartialRouteResult
     /**
      * Create routing failure result where http method is not allowed for the
      * otherwise routable request
+     *
+     * @throws InvalidArgumentException
      */
     public static function fromMethodFailure(
         array $allowedMethods,
         int $pathOffset,
         int $matchedPathLength
-    ) : PartialRouteResult {
+    ) : self {
         if (empty($allowedMethods)) {
-            throw new DomainException('Method failure requires list of allowed methods');
+            throw new InvalidArgumentException('Method failure requires list of allowed methods');
         }
         if ($pathOffset < 0) {
-            throw new DomainException('Path offset cannot be negative');
+            throw new InvalidArgumentException('Path offset cannot be negative');
         }
         if ($matchedPathLength < 0) {
-            throw new DomainException('Matched path length cannot be negative');
+            throw new InvalidArgumentException('Matched path length cannot be negative');
         }
 
         $result = new self();
@@ -162,14 +178,16 @@ final class PartialRouteResult
      * with successful result.
      *
      * @param string $flag Signifies mode of setting route name:
-     *      - {@see RouteResult::NAME_REPLACE} replaces existing route name
-     *      - {@see RouteResult::NAME_PREPEND} prepends as a parent route part name.
-     *      - {@see RouteResult::NAME_APPEND} appends as a child route part name.
+     *     - {@see RouteResult::NAME_REPLACE} replaces existing route name
+     *     - {@see RouteResult::NAME_PREPEND} prepends as a parent route part name.
+     *     - {@see RouteResult::NAME_APPEND} appends as a child route part name.
+     * @throws InvalidArgumentException
+     * @throws RuntimeException
      */
-    public function withMatchedRouteName(string $routeName, $flag = RouteResult::NAME_REPLACE) : PartialRouteResult
+    public function withMatchedRouteName(string $routeName, $flag = RouteResult::NAME_REPLACE) : self
     {
         if (empty($routeName)) {
-            throw new DomainException('Route name cannot be empty');
+            throw new InvalidArgumentException('Route name cannot be empty');
         }
         if (! $this->isSuccess()) {
             throw new RuntimeException('Only successful routing can have matched route name');
@@ -187,7 +205,7 @@ final class PartialRouteResult
         } elseif ($flag === RouteResult::NAME_APPEND) {
             $routeName = sprintf('%s/%s', $this->matchedRouteName, $routeName);
         } else {
-            throw new DomainException('Unknown flag for setting matched route name');
+            throw new InvalidArgumentException('Unknown flag for setting matched route name');
         }
         $result->matchedRouteName = $routeName;
 
@@ -197,8 +215,10 @@ final class PartialRouteResult
     /**
      * Produce a new partial route result with provided matched parameters. Can only be
      * used with successful result.
+     *
+     * @throws RuntimeException
      */
-    public function withMatchedParams(array $params) : PartialRouteResult
+    public function withMatchedParams(array $params) : self
     {
         if (! $this->isSuccess()) {
             throw new RuntimeException('Only successful routing can have matched params');
@@ -248,6 +268,31 @@ final class PartialRouteResult
     public function getMatchedPathLength() : int
     {
         return $this->matchedPathLength;
+    }
+
+    public function getMatchedAllowedMethods() : ?array
+    {
+        return $this->matchedAllowedMethods;
+    }
+
+    public function withMatchedAllowedMethods(array $methods) : self
+    {
+        $result = clone $this;
+        $result->setMatchedAllowedMethods($methods);
+
+        return $result;
+    }
+
+    /**
+     * Helper function to deduplicate and normalize HTTP method names
+     */
+    private function setMatchedAllowedMethods(array $methods) : void
+    {
+        $methods = array_keys(array_change_key_case(
+            array_flip($methods),
+            CASE_UPPER
+        ));
+        $this->matchedAllowedMethods = $methods;
     }
 
     /**

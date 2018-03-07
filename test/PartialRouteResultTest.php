@@ -4,13 +4,14 @@
  * @copyright Copyright (c) 2005-2018 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   https://github.com/zendframework/zend-router/blob/master/LICENSE.md New BSD License
  */
+
 declare(strict_types=1);
 
 namespace ZendTest\Router;
 
 use PHPUnit\Framework\TestCase;
 use Zend\Diactoros\Uri;
-use Zend\Router\Exception\DomainException;
+use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
 use Zend\Router\PartialRouteResult;
 use Zend\Router\RouteResult;
@@ -49,14 +50,14 @@ class PartialRouteResultTest extends TestCase
 
     public function testFromMethodFailureRejectsNegativeOffset()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Path offset cannot be negative');
         $result = PartialRouteResult::fromMethodFailure(['GET'], -1, 0);
     }
 
     public function testFromMethodFailureRejectsNegativeMatchedLength()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Matched path length cannot be negative');
         PartialRouteResult::fromMethodFailure(['GET'], 0, -1);
     }
@@ -68,7 +69,7 @@ class PartialRouteResultTest extends TestCase
      */
     public function testFromMethodFailureThrowsOnEmptyAllowedMethodsList()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Method failure requires list of allowed methods');
         PartialRouteResult::fromMethodFailure([], 10, 20);
     }
@@ -109,14 +110,14 @@ class PartialRouteResultTest extends TestCase
 
     public function testFromRouteMatchRejectsNegativeOffset()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Path offset cannot be negative');
         PartialRouteResult::fromRouteMatch([], -1, 0);
     }
 
     public function testFromRouteMatchRejectsNegativeMatchedLength()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Matched path length cannot be negative');
         PartialRouteResult::fromRouteMatch([], 0, -1);
     }
@@ -180,7 +181,7 @@ class PartialRouteResultTest extends TestCase
 
     public function testWithRouteNameRejectsEmptyName()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Route name cannot be empty');
         $result = PartialRouteResult::fromRouteMatch([], 0, 0, 'foo');
         $result->withMatchedRouteName('');
@@ -188,7 +189,7 @@ class PartialRouteResultTest extends TestCase
 
     public function testWithRouteNameThrowsOnUnknownFlag()
     {
-        $this->expectException(DomainException::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Unknown flag');
         $result = PartialRouteResult::fromRouteMatch([], 0, 0, 'foo');
         $result->withMatchedRouteName('bar', 'unknown');
@@ -213,40 +214,61 @@ class PartialRouteResultTest extends TestCase
         $result->withMatchedParams(['foo' => 'bar']);
     }
 
-    public function provideFullPathMatchData()
+    public function provideFullPathMatchData() : array
     {
         return [
             'full match' => [
                 new Uri('/foo'),
                 0,
                 4,
-                true
+                true,
             ],
             'partial match' => [
                 new Uri('/foo'),
                 0,
                 3,
-                false
+                false,
             ],
             'offset full match' => [
                 new Uri('/foo'),
                 1,
                 3,
-                true
+                true,
             ],
             'offset partial match' => [
                 new Uri('/foo/bar'),
                 1,
                 3,
-                false
+                false,
             ],
             'empty uri path' => [
                 new Uri(''),
                 0,
                 0,
-                true
+                true,
             ],
         ];
+    }
+
+    public function testMatchedAllowedMethodsAreNullByDefault()
+    {
+        $result = PartialRouteResult::fromRouteMatch([], 0, 0);
+        $this->assertNull($result->getMatchedAllowedMethods());
+    }
+
+    public function testMatchCouldProvideListOfAllowedMethods()
+    {
+        $result = PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET']);
+        $this->assertEquals(['GET'], $result->getMatchedAllowedMethods());
+    }
+
+    public function testWithMatchedAllowedMethodsProducesNewInstance()
+    {
+        $result = PartialRouteResult::fromRouteMatch([], 0, 0, null, ['GET']);
+        $result2 = $result->withMatchedAllowedMethods(['POST']);
+        $this->assertNotSame($result, $result2);
+        $this->assertEquals(['GET'], $result->getMatchedAllowedMethods());
+        $this->assertEquals(['POST'], $result2->getMatchedAllowedMethods());
     }
 
     /**
