@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
+use Zend\Router\Container\RoutePluginManagerFactory;
+
 /**
  * Provide base configuration for using the component.
  *

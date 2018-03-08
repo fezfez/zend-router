@@ -1,7 +1,7 @@
 <?php
 /**
  * @link      http://github.com/zendframework/zend-router for the canonical source repository
- * @copyright Copyright (c) 2005-2016 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
@@ -28,9 +28,11 @@ class RoutePluginManagerTest extends TestCase
 
     public function testCanLoadAnyRoute()
     {
-        $routes = new RoutePluginManager(new ServiceManager(), ['invokables' => [
-            'DummyRoute' => TestAsset\DummyRoute::class,
-        ]]);
+        $routes = new RoutePluginManager(new ServiceManager(), [
+            'aliases' => [
+                'DummyRoute' => TestAsset\DummyRoute::class,
+            ],
+        ]);
         $route = $routes->get('DummyRoute');
 
         $this->assertInstanceOf(TestAsset\DummyRoute::class, $route);

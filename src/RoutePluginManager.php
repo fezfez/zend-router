@@ -1,7 +1,7 @@
 <?php
 /**
  * @link      http://github.com/zendframework/zend-router for the canonical source repository
- * @copyright Copyright (c) 2005-2016 Zend Technologies USA Inc. (http://www.zend.com)
+ * @copyright Copyright (c) 2005-2017 Zend Technologies USA Inc. (http://www.zend.com)
  * @license   http://framework.zend.com/license/new-bsd New BSD License
  */
 
@@ -11,7 +11,6 @@ namespace Zend\Router;
 
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\AbstractPluginManager;
-use Zend\ServiceManager\Exception\InvalidServiceException;
 
 /**
  * Plugin manager implementation for routes
@@ -33,18 +32,55 @@ class RoutePluginManager extends AbstractPluginManager
     protected $instanceOf = RouteInterface::class;
 
     /**
-     * Do not share instances. (v3)
+     * Do not share instances.
      *
      * @var bool
      */
     protected $shareByDefault = false;
 
     /**
-     * Do not share instances. (v2)
-     *
-     * @var bool
+     * @var array
      */
-    protected $sharedByDefault = false;
+    protected $aliases = [
+        'chain'    => Route\Chain::class,
+        'Chain'    => Route\Chain::class,
+        'hostname' => Route\Hostname::class,
+        'Hostname' => Route\Hostname::class,
+        'literal'  => Route\Literal::class,
+        'Literal'  => Route\Literal::class,
+        'method'   => Route\Method::class,
+        'Method'   => Route\Method::class,
+        'part'     => Route\Part::class,
+        'Part'     => Route\Part::class,
+        'regex'    => Route\Regex::class,
+        'Regex'    => Route\Regex::class,
+        'scheme'   => Route\Scheme::class,
+        'Scheme'   => Route\Scheme::class,
+        'segment'  => Route\Segment::class,
+        'Segment'  => Route\Segment::class,
+        'Zend\Router\Http\Chain' => Route\Chain::class,
+        'Zend\Router\Http\Hostname' => Route\Hostname::class,
+        'Zend\Router\Http\Literal' => Route\Literal::class,
+        'Zend\Router\Http\Method' => Route\Method::class,
+        'Zend\Router\Http\Part' => Route\Part::class,
+        'Zend\Router\Http\Regex' => Route\Regex::class,
+        'Zend\Router\Http\Scheme' => Route\Scheme::class,
+        'Zend\Router\Http\Segment' => Route\Segment::class,
+    ];
+
+    /**
+     * @var array
+     */
+    protected $factories = [
+        Route\Chain::class    => RouteInvokableFactory::class,
+        Route\Hostname::class => RouteInvokableFactory::class,
+        Route\Literal::class  => RouteInvokableFactory::class,
+        Route\Method::class   => RouteInvokableFactory::class,
+        Route\Part::class     => RouteInvokableFactory::class,
+        Route\Regex::class    => RouteInvokableFactory::class,
+        Route\Scheme::class   => RouteInvokableFactory::class,
+        Route\Segment::class  => RouteInvokableFactory::class,
+    ];
 
     /**
      * Constructor
@@ -53,125 +89,10 @@ class RoutePluginManager extends AbstractPluginManager
      * abstract factory.
      *
      * @param ContainerInterface|\Zend\ServiceManager\ConfigInterface $configOrContainerInstance
-     * @param array $v3config
      */
-    public function __construct($configOrContainerInstance, array $v3config = [])
+    public function __construct($configOrContainerInstance, array $config = [])
     {
         $this->addAbstractFactory(RouteInvokableFactory::class);
-        parent::__construct($configOrContainerInstance, $v3config);
-    }
-
-    /**
-     * Validate a route plugin. (v2)
-     *
-     * @param object $plugin
-     * @throws InvalidServiceException
-     */
-    public function validate($plugin)
-    {
-        if (! $plugin instanceof $this->instanceOf) {
-            throw new InvalidServiceException(sprintf(
-                'Plugin of type %s is invalid; must implement %s',
-                (is_object($plugin) ? get_class($plugin) : gettype($plugin)),
-                RouteInterface::class
-            ));
-        }
-    }
-
-    /**
-     * Validate a route plugin. (v2)
-     *
-     * @param object $plugin
-     * @throws Exception\RuntimeException
-     */
-    public function validatePlugin($plugin)
-    {
-        try {
-            $this->validate($plugin);
-        } catch (InvalidServiceException $e) {
-            throw new Exception\RuntimeException(
-                $e->getMessage(),
-                $e->getCode(),
-                $e
-            );
-        }
-    }
-
-    /**
-     * Pre-process configuration. (v3)
-     *
-     * Checks for invokables, and, if found, maps them to the
-     * component-specific RouteInvokableFactory; removes the invokables entry
-     * before passing to the parent.
-     *
-     * @param array $config
-     * @return void
-     */
-    public function configure(array $config)
-    {
-        if (isset($config['invokables']) && ! empty($config['invokables'])) {
-            $aliases   = $this->createAliasesForInvokables($config['invokables']);
-            $factories = $this->createFactoriesForInvokables($config['invokables']);
-
-            if (! empty($aliases)) {
-                $config['aliases'] = isset($config['aliases'])
-                    ? array_merge($config['aliases'], $aliases)
-                    : $aliases;
-            }
-
-            $config['factories'] = isset($config['factories'])
-                ? array_merge($config['factories'], $factories)
-                : $factories;
-
-            unset($config['invokables']);
-        }
-
-        parent::configure($config);
-    }
-
-     /**
-     * Create aliases for invokable classes.
-     *
-     * If an invokable service name does not match the class it maps to, this
-     * creates an alias to the class (which will later be mapped as an
-     * invokable factory).
-     *
-     * @param array $invokables
-     * @return array
-     */
-    protected function createAliasesForInvokables(array $invokables)
-    {
-        $aliases = [];
-        foreach ($invokables as $name => $class) {
-            if ($name === $class) {
-                continue;
-            }
-            $aliases[$name] = $class;
-        }
-        return $aliases;
-    }
-
-    /**
-     * Create invokable factories for invokable classes.
-     *
-     * If an invokable service name does not match the class it maps to, this
-     * creates an invokable factory entry for the class name; otherwise, it
-     * creates an invokable factory for the entry name.
-     *
-     * @param array $invokables
-     * @return array
-     */
-    protected function createFactoriesForInvokables(array $invokables)
-    {
-        $factories = [];
-        foreach ($invokables as $name => $class) {
-            if ($name === $class) {
-                $factories[$name] = RouteInvokableFactory::class;
-                continue;
-            }
-
-            $factories[$class] = RouteInvokableFactory::class;
-        }
-        return $factories;
+        parent::__construct($configOrContainerInstance, $config);
     }
 }

@@ -7,17 +7,16 @@
 
 declare(strict_types=1);
 
-namespace ZendTest\Router;
+namespace ZendTest\Router\Container;
 
 use Interop\Container\ContainerInterface;
 use PHPUnit\Framework\TestCase;
+use Zend\Router\Container\RoutePluginManagerFactory;
 use Zend\Router\RouteInterface;
 use Zend\Router\RoutePluginManager;
-use Zend\Router\RoutePluginManagerFactory;
-use Zend\ServiceManager\ServiceLocatorInterface;
 
 /**
- * @covers \Zend\Router\RoutePluginManagerFactory
+ * @covers \Zend\Router\Container\RoutePluginManagerFactory
  */
 class RoutePluginManagerFactoryTest extends TestCase
 {
@@ -33,22 +32,15 @@ class RoutePluginManagerFactoryTest extends TestCase
         $this->assertInstanceOf(RoutePluginManager::class, $plugins);
     }
 
-    public function testCreateServiceReturnsAPluginManager()
-    {
-        $container = $this->prophesize(ServiceLocatorInterface::class);
-        $container->willImplement(ContainerInterface::class);
-
-        $plugins = $this->factory->createService($container->reveal());
-        $this->assertInstanceOf(RoutePluginManager::class, $plugins);
-    }
-
     public function testInvocationCanProvideOptionsToThePluginManager()
     {
-        $options = ['factories' => [
-            'TestRoute' => function ($container) {
-                return $this->prophesize(RouteInterface::class)->reveal();
-            },
-        ]];
+        $options = [
+            'factories' => [
+                'TestRoute' => function ($container) {
+                    return $this->prophesize(RouteInterface::class)->reveal();
+                },
+            ],
+        ];
         $plugins = $this->factory->__invoke(
             $this->container->reveal(),
             RoutePluginManager::class,
