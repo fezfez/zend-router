@@ -19,9 +19,7 @@ use Zend\Router\Route\Literal;
 use Zend\Router\Route\Method;
 use Zend\Router\Route\Segment;
 use Zend\Router\RouteInterface;
-use Zend\Router\RoutePluginManager;
 use Zend\Router\RouteResult;
-use Zend\ServiceManager\ServiceManager;
 use Zend\Stdlib\ArrayObject;
 use ZendTest\Router\FactoryTester;
 use ZendTest\Router\Route\TestAsset\RouteTestDefinition;
@@ -253,5 +251,23 @@ class ChainTest extends TestCase
                 'routes' => new ArrayObject(),
             ]
         );
+    }
+
+    public function testFactoryConvertsNumericKeysToString()
+    {
+        $chain = Chain::factory([
+            'routes' => [
+                new Literal('/'),
+                new Literal('/'),
+                new Literal('/'),
+            ],
+        ]);
+
+        $chained = $chain->getRoutes();
+        $this->assertCount(3, $chained);
+
+        foreach ($chained as $name => $route) {
+            $this->assertStringMatchesFormat('__chained_route_no_name_%d', $name);
+        }
     }
 }

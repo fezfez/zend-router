@@ -24,8 +24,6 @@ use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\Factory\FactoryInterface;
 use Zend\ServiceManager\ServiceManager;
 
-use function array_keys;
-
 /**
  * @covers \Zend\Router\RouteConfigFactory
  */
@@ -111,19 +109,19 @@ class RouteConfigFactoryTest extends TestCase
         $spec = [
             'type' => Literal::class,
             'options' => [
-                'route' => '/',
+                'route' => '/foo',
             ],
             'chain_routes' => [
                 [
                     'type' => Literal::class,
                     'options' => [
-                        'route' => '/',
+                        'route' => '/bar',
                     ],
                 ],
                 [
                     'type' => Literal::class,
                     'options' => [
-                        'route' => '/',
+                        'route' => '/baz',
                     ],
                 ],
             ],
@@ -132,11 +130,8 @@ class RouteConfigFactoryTest extends TestCase
         $chainRoute = $this->factory->routeFromSpec($spec);
         $this->assertInstanceOf(Chain::class, $chainRoute);
 
-        $chainedRoutes = array_keys($chainRoute->getRoutes());
-        $this->assertCount(3, $chainedRoutes);
-        foreach ($chainedRoutes as $name) {
-            $this->assertStringMatchesFormat('__chained_route_no_name_%d', $name);
-        }
+        $request = new ServerRequest([], [], new Uri('/foo/bar/baz'));
+        $this->assertTrue($chainRoute->match($request)->isSuccess());
     }
 
     public function testCreateRouteWithChildRoutes()

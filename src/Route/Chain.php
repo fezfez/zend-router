@@ -26,7 +26,9 @@ use function array_merge;
 use function array_reverse;
 use function end;
 use function is_array;
+use function is_numeric;
 use function key;
+use function sprintf;
 
 /**
  * Chain route.
@@ -34,6 +36,11 @@ use function key;
 class Chain extends SimpleRouteStack implements PartialRouteInterface
 {
     use PartialRouteTrait;
+
+    /**
+     * @var int
+     */
+    static private $chainedIndex = 0;
 
     /**
      * List of assembled parameters.
@@ -69,9 +76,15 @@ class Chain extends SimpleRouteStack implements PartialRouteInterface
             $options['routes'] = ArrayUtils::iteratorToArray($options['routes']);
         }
 
-        return new static(
-            $options['routes']
-        );
+        $routes = [];
+        foreach ($options['routes'] as $name => $route) {
+            if (is_numeric($name)) {
+                $name = sprintf('__chained_route_no_name_%d', self::$chainedIndex++);
+            }
+            $routes[$name] = $route;
+        }
+
+        return new static($routes);
     }
 
     /**

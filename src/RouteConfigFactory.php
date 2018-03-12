@@ -14,7 +14,6 @@ use Zend\Router\Exception\RuntimeException;
 
 use function array_unshift;
 use function is_array;
-use function is_numeric;
 use function is_string;
 use function sprintf;
 
@@ -29,11 +28,6 @@ class RouteConfigFactory
      * @var array
      */
     private $prototypes = [];
-
-    /**
-     * @var int
-     */
-    static private $chainedIndex = 0;
 
     public function __construct(RoutePluginManager $routes)
     {
@@ -127,9 +121,6 @@ class RouteConfigFactory
 
         $chainRoutes = [];
         foreach ($chainRoutesSpec as $name => $routeSpec) {
-            if (is_numeric($name)) {
-                $name = sprintf('__chained_route_no_name_%d', self::$chainedIndex++);
-            }
             $chainRoutes[$name] = $this->routeFromSpec($routeSpec);
         }
 
