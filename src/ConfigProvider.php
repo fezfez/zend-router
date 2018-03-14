@@ -30,7 +30,7 @@ class ConfigProvider
     {
         return [
             'dependencies' => $this->getDependencyConfig(),
-            'route_manager' => $this->getRouteManagerConfig(),
+            RoutePluginManager::class => $this->getRouteManagerConfig(),
         ];
     }
 
@@ -43,15 +43,10 @@ class ConfigProvider
     {
         return [
             'aliases' => [
-                'HttpRouter' => TreeRouteStack::class,
-                'router' => RouteStackInterface::class,
-                'Router' => RouteStackInterface::class,
                 'RoutePluginManager' => RoutePluginManager::class,
             ],
             'factories' => [
-                TreeRouteStack::class => Route\HttpRouterFactory::class,
                 RoutePluginManager::class => RoutePluginManagerFactory::class,
-                RouteStackInterface::class => RouterFactory::class,
             ],
         ];
     }
