@@ -35,12 +35,12 @@ final class RouteTestDefinition
     private $matchRequest;
 
     /**
-     * @var ?RouteResult
+     * @var null|RouteResult
      */
     private $matchResult;
 
     /**
-     * @var ?PartialRouteResult
+     * @var null|PartialRouteResult
      */
     private $partialMatchResult;
 
@@ -55,12 +55,12 @@ final class RouteTestDefinition
     private $matchOptions = [];
 
     /**
-     * @var ?UriInterface
+     * @var null|UriInterface
      */
     private $assembleWithUri;
 
     /**
-     * @var ?UriInterface
+     * @var null|UriInterface
      */
     private $assembleResult;
 
@@ -74,6 +74,10 @@ final class RouteTestDefinition
      */
     private $assembleOptions = [];
 
+    /**
+     * @param ServerRequestInterface|UriInterface $requestOrUriToMatch
+     * @throws Exception
+     */
     public function __construct(RouteInterface $route, $requestOrUriToMatch)
     {
         $this->route = $route;
@@ -102,6 +106,9 @@ final class RouteTestDefinition
         return $this;
     }
 
+    /**
+     * @throws Exception
+     */
     public function getExpectedMatchResult() : RouteResult
     {
         if (! $this->matchResult) {
@@ -112,7 +119,9 @@ final class RouteTestDefinition
         return $this->matchResult;
     }
 
-
+    /**
+     * @throws Exception
+     */
     public function expectPartialMatchResult(PartialRouteResult $result) : self
     {
         if (! $this->route instanceof PartialRouteInterface) {
@@ -123,6 +132,9 @@ final class RouteTestDefinition
         return $this;
     }
 
+    /**
+     * @throws Exception
+     */
     public function getExpectedPartialMatchResult() : PartialRouteResult
     {
         if (! $this->route instanceof PartialRouteInterface) {

@@ -42,6 +42,9 @@ class RouteMatch
         $this->params = $params;
     }
 
+    /**
+     * @throws RuntimeException
+     */
     public static function fromRouteResult(RouteResult $result) : self
     {
         if (! $result->isSuccess()) {
@@ -102,7 +105,7 @@ class RouteMatch
      * Get a specific parameter.
      *
      * @param string $name
-     * @param null|mixed $default
+     * @param mixed $default
      * @return mixed
      */
     public function getParam($name, $default = null)

@@ -74,6 +74,8 @@ final class RouteResult
     /**
      * Create routing failure result where http method is not allowed for the
      * otherwise routable request
+     *
+     * @throws DomainException
      */
     public static function fromMethodFailure(array $allowedMethods) : self
     {
@@ -121,6 +123,8 @@ final class RouteResult
      *     - {@see RouteResult::NAME_REPLACE} replaces existing route name
      *     - {@see RouteResult::NAME_PREPEND} prepends as a parent route part name.
      *     - {@see RouteResult::NAME_APPEND} appends as a child route part name.
+     * @throws DomainException
+     * @throws RuntimeException
      */
     public function withMatchedRouteName(string $routeName, $flag = self::NAME_REPLACE) : self
     {
@@ -153,6 +157,8 @@ final class RouteResult
     /**
      * Produce a new route result with provided matched parameters. Can only be
      * used with successful result.
+     *
+     * @throws RuntimeException
      */
     public function withMatchedParams(array $params) : self
     {

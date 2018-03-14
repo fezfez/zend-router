@@ -26,8 +26,6 @@ class FactoryTester
 
     /**
      * Create a new factory tester.
-     *
-     * @param  TestCase $testCase
      */
     public function __construct(TestCase $testCase)
     {
@@ -36,11 +34,8 @@ class FactoryTester
 
     /**
      * Test a factory.
-     *
-     * @param  string $className
-     * @return void
      */
-    public function testFactory($classname, array $requiredOptions, array $options)
+    public function testFactory(string $classname, array $requiredOptions, array $options) : void
     {
         // Test required options.
         foreach ($requiredOptions as $option => $exceptionMessage) {

@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
-use Psr\Http\Message\UriInterface;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Psr\Http\Message\UriInterface;
 
 /**
  * RouteInterface interface.
