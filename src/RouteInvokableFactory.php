@@ -11,9 +11,12 @@ namespace Zend\Router;
 
 use Interop\Container\ContainerInterface;
 use Zend\ServiceManager\Exception\ServiceNotCreatedException;
-use Zend\ServiceManager\AbstractFactoryInterface;
-use Zend\ServiceManager\FactoryInterface;
-use Zend\ServiceManager\ServiceLocatorInterface;
+use Zend\ServiceManager\Factory\AbstractFactoryInterface;
+
+use function class_exists;
+use function is_subclass_of;
+use function method_exists;
+use function sprintf;
 
 /**
  * Specialized invokable/abstract factory for use with RoutePluginManager.
@@ -21,27 +24,17 @@ use Zend\ServiceManager\ServiceLocatorInterface;
  * Can be mapped directly to specific route plugin names, or used as an
  * abstract factory to map FQCN services to invokables.
  */
-class RouteInvokableFactory implements
-    AbstractFactoryInterface,
-    FactoryInterface
+class RouteInvokableFactory implements AbstractFactoryInterface
 {
     /**
-     * Options used to create instance (used with zend-servicemanager v2)
+     * Can we create a route instance with the given name?
      *
-     * @var array
-     */
-    protected $creationOptions = [];
-
-    /**
-     * Can we create a route instance with the given name? (v3)
+     * Only works for FQCN $routeName values, for classes that implement RouteInterface
+     * and have factory method.
      *
-     * Only works for FQCN $routeName values, for classes that implement RouteInterface.
-     *
-     * @param ContainerInterface $container
      * @param string $routeName
-     * @return bool
      */
-    public function canCreate(ContainerInterface $container, $routeName)
+    public function canCreate(ContainerInterface $container, $routeName) : bool
     {
         if (! class_exists($routeName)) {
             return false;
@@ -51,39 +44,26 @@ class RouteInvokableFactory implements
             return false;
         }
 
-        return true;
-    }
+        if (! method_exists($routeName, 'factory')) {
+            return false;
+        }
 
-    /**
-     * Can we create a route instance with the given name? (v2)
-     *
-     * Proxies to canCreate().
-     *
-     * @param ServiceLocatorInterface $container
-     * @param string $normalizedName
-     * @param string $routeName
-     * @return bool
-     */
-    public function canCreateServiceWithName(ServiceLocatorInterface $container, $normalizedName, $routeName)
-    {
-        return $this->canCreate($container, $routeName);
+        return true;
     }
 
     /**
      * Create and return a RouteInterface instance.
      *
-     * If the specified $routeName class does not exist or does not implement
-     * RouteInterface, this method will raise an exception.
+     * If the specified $routeName class does not exist, does not implement
+     * RouteInterface or does not provide factory method, this method will raise an exception.
      *
      * Otherwise, it uses the class' `factory()` method with the provided
      * $options to produce an instance.
      *
-     * @param ContainerInterface $container
      * @param string $routeName
-     * @param null|array $options
-     * @return RouteInterface
+     * @throws ServiceNotCreatedException
      */
-    public function __invoke(ContainerInterface $container, $routeName, array $options = null)
+    public function __invoke(ContainerInterface $container, $routeName, array $options = null) : RouteInterface
     {
         $options = $options ?: [];
 
@@ -104,45 +84,14 @@ class RouteInvokableFactory implements
             ));
         }
 
+        if (! method_exists($routeName, 'factory')) {
+            throw new ServiceNotCreatedException(sprintf(
+                '%s: failed retrieving invokable class "%s"; class does not provide factory method',
+                __CLASS__,
+                $routeName
+            ));
+        }
+
         return $routeName::factory($options);
-    }
-
-    /**
-     * Create a route instance with the given name. (v2)
-     *
-     * Proxies to __invoke().
-     *
-     * @param ServiceLocatorInterface $container
-     * @param string $normalizedName
-     * @param string $routeName
-     * @return RouteInterface
-     */
-    public function createServiceWithName(ServiceLocatorInterface $container, $normalizedName, $routeName)
-    {
-        return $this($container, $routeName, $this->creationOptions);
-    }
-
-    /**
-     * Create and return RouteInterface instance
-     *
-     * For use with zend-servicemanager v2; proxies to __invoke().
-     *
-     * @param ServiceLocatorInterface $container
-     * @return RouteInterface
-     */
-    public function createService(ServiceLocatorInterface $container, $normalizedName = null, $routeName = null)
-    {
-        $routeName = $routeName ?: RouteInterface::class;
-        return $this($container, $routeName, $this->creationOptions);
-    }
-
-    /**
-     * Set options to use when creating a service (v2)
-     *
-     * @param array $creationOptions
-     */
-    public function setCreationOptions(array $creationOptions)
-    {
-        $this->creationOptions = $creationOptions;
     }
 }

@@ -19,6 +19,11 @@ use Zend\Router\RouteResult;
  */
 class DummyRoute implements RouteInterface
 {
+    public static function factory(array  $options) : self
+    {
+        return new static();
+    }
+
     public function match(Request $request, int $pathOffset = 0, array $options = []) : RouteResult
     {
         return RouteResult::fromRouteMatch([]);
