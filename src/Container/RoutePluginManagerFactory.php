@@ -28,6 +28,9 @@ class RoutePluginManagerFactory implements FactoryInterface
 
     public function getRoutesConfig(ContainerInterface $container) : array
     {
+        if (! $container->has('config')) {
+            return [];
+        }
         return $container->get('config')[RoutePluginManager::class] ?? [];
     }
 }

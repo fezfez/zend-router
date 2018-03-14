@@ -11,7 +11,9 @@ namespace ZendTest\Router\Container;
 
 use Interop\Container\ContainerInterface;
 use PHPUnit\Framework\TestCase;
+use Prophecy\Prophecy\ObjectProphecy;
 use Zend\Router\Container\RoutePluginManagerFactory;
+use Zend\Router\Route\Literal;
 use Zend\Router\RouteInterface;
 use Zend\Router\RoutePluginManager;
 
@@ -20,6 +22,16 @@ use Zend\Router\RoutePluginManager;
  */
 class RoutePluginManagerFactoryTest extends TestCase
 {
+    /**
+     * @var ContainerInterface|ObjectProphecy
+     */
+    private $container;
+
+    /**
+     * @var RoutePluginManagerFactory
+     */
+    private $factory;
+
     public function setUp()
     {
         $this->container = $this->prophesize(ContainerInterface::class);
@@ -30,6 +42,24 @@ class RoutePluginManagerFactoryTest extends TestCase
     {
         $plugins = $this->factory->__invoke($this->container->reveal(), RoutePluginManager::class);
         $this->assertInstanceOf(RoutePluginManager::class, $plugins);
+    }
+
+    public function testUsesRouteManagerConfigFromContainerWhenProvided()
+    {
+        $route = new Literal('/');
+        $factory = function () use ($route) {
+            return $route;
+        };
+        $this->container->has('config')->willReturn(true);
+        $this->container->get('config')->willReturn([
+            RoutePluginManager::class => [
+                'factories' => [
+                    'test' => $factory,
+                ],
+            ],
+        ]);
+        $routes = $this->factory->__invoke($this->container->reveal(), RoutePluginManager::class);
+        $this->assertSame($route, $routes->get('test'));
     }
 
     public function testInvocationCanProvideOptionsToThePluginManager()
