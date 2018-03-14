@@ -193,26 +193,28 @@ class HostnameTest extends TestCase
             ->shouldAssembleAndExpectResultSameAsUriForMatching()
             ->useParamsForAssemble(['foo' => null]);
 
-        /**
-         * @todo investigate if this can be fixed or should be documented as a quirk
+        /*
+         * This case is left here as a reference of ambiguous use case. It should
+         * probably be fixed to provide more sensible behavior.
          *
-         * There is a workaround, [[:foo.]:bar.] removes ambiguity. Fix could
+         *  There is a workaround, [[:foo.]:bar.] removes ambiguity. Fix could
          *     be by emulating such nesting for same level optional parts, but it
          *     might break other use cases
+         *
+         * $params = ['bar' => 'bat'];
+         * yield 'optional parameters evaluated right to left' => (new RouteTestDefinition(
+         *     new Hostname('[:foo.][:bar.]example.com'),
+         *     (new Uri())->withHost('bat.example.com')
+         * ))
+         *     ->expectMatchResult(
+         *         RouteResult::fromRouteMatch($params)
+         *     )
+         *     ->expectPartialMatchResult(
+         *         PartialRouteResult::fromRouteMatch($params, 0, 0)
+         *     )
+         *     ->shouldAssembleAndExpectResultSameAsUriForMatching()
+         *     ->useParamsForAssemble($params);
          */
-        $params = ['bar' => 'bat'];
-        yield 'optional parameters evaluated right to left' => (new RouteTestDefinition(
-            new Hostname('[:foo.][:bar.]example.com'),
-            (new Uri())->withHost('bat.example.com')
-        ))
-            ->expectMatchResult(
-                RouteResult::fromRouteMatch($params)
-            )
-            ->expectPartialMatchResult(
-                PartialRouteResult::fromRouteMatch($params, 0, 0)
-            )
-            ->shouldAssembleAndExpectResultSameAsUriForMatching()
-            ->useParamsForAssemble($params);
 
         yield 'two missing optional subdomain' => (new RouteTestDefinition(
             new Hostname('[:foo.][:bar.]example.com'),
