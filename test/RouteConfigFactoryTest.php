@@ -24,6 +24,8 @@ use Zend\Router\RoutePluginManager;
 use Zend\ServiceManager\Factory\FactoryInterface;
 use Zend\ServiceManager\ServiceManager;
 
+use function sprintf;
+
 /**
  * @covers \Zend\Router\RouteConfigFactory
  */
@@ -190,32 +192,50 @@ class RouteConfigFactoryTest extends TestCase
         $this->assertTrue($partRoute->match($request)->isSuccess());
     }
 
-    public function testAddPrototype()
-    {
-        $route = new Literal('/');
-
-        $this->factory->addPrototype('test', $route);
-        $this->assertSame($route, $this->factory->getPrototype('test'));
-    }
-
-    public function testGetNonExistentPrototype()
-    {
-        $this->assertNull($this->factory->getPrototype('test'));
-    }
-
     public function testCreateRouteFromPrototype()
     {
         $prototypeRoute = new Literal('/');
-        $this->factory->addPrototype('test', $prototypeRoute);
+        $prototypes = ['test' => $prototypeRoute];
 
-        $route = $this->factory->routeFromSpec('test');
+        $route = $this->factory->routeFromSpec('test', $prototypes);
         $this->assertSame($prototypeRoute, $route);
+    }
+
+    public function testCreateChildRouteFromPrototype()
+    {
+        $prototypeRoute = new Literal('/');
+        $prototypes = ['test-prototype' => $prototypeRoute];
+
+        $spec = [
+            'type' => Literal::class,
+            'options' => [
+                'route' => '/',
+            ],
+            'child_routes' => [
+                'test' => 'test-prototype',
+            ],
+        ];
+
+        $route = $this->factory->routeFromSpec($spec, $prototypes);
+        $this->assertInstanceOf(Part::class, $route);
+        $this->assertSame($prototypeRoute, $route->getRoute('test'));
     }
 
     public function testCreateRouteFromNonExistantPrototypeShouldThrow()
     {
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Could not find prototype with name test');
-        $this->factory->routeFromSpec('test');
+        $this->factory->routeFromSpec('test', []);
+    }
+
+    public function testCreateRouteFromInvalidPrototypeShouldThrow()
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage(sprintf(
+            'Invalid prototype provided. Expected %s got %s',
+            RouteInterface::class,
+            'string'
+        ));
+        $this->factory->routeFromSpec('test', ['test' => Literal::class]);
     }
 }

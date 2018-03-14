@@ -13,7 +13,10 @@ use Zend\Router\Exception\InvalidArgumentException;
 use Zend\Router\Exception\RuntimeException;
 
 use function array_unshift;
+use function get_class;
+use function gettype;
 use function is_array;
+use function is_object;
 use function is_string;
 use function sprintf;
 
@@ -23,11 +26,6 @@ class RouteConfigFactory
      * @var RoutePluginManager
      */
     private $routes;
-
-    /**
-     * @var array
-     */
-    private $prototypes = [];
 
     public function __construct(RoutePluginManager $routes)
     {
@@ -41,15 +39,23 @@ class RouteConfigFactory
      * @throws RuntimeException
      * @throws InvalidArgumentException
      */
-    public function routeFromSpec($spec) : RouteInterface
+    public function routeFromSpec($spec, array $prototypes = []) : RouteInterface
     {
         if ($spec instanceof RouteInterface) {
             return $spec;
         }
 
         if (is_string($spec)) {
-            if (null === ($route = $this->getPrototype($spec))) {
+            $route = $prototypes[$spec] ?? null;
+            if (null === $route) {
                 throw new RuntimeException(sprintf('Could not find prototype with name %s', $spec));
+            }
+            if (! $route instanceof RouteInterface) {
+                throw new RuntimeException(sprintf(
+                    'Invalid prototype provided. Expected %s got %s',
+                    RouteInterface::class,
+                    is_object($route) ? get_class($route) : gettype($route)
+                ));
             }
 
             return $route;
@@ -60,7 +66,7 @@ class RouteConfigFactory
         }
 
         if (isset($spec['chain_routes'])) {
-            $route = $this->createChainFromSpec($spec);
+            $route = $this->createChainFromSpec($spec, $prototypes);
         } else {
             if (! isset($spec['type'])) {
                 throw new InvalidArgumentException('Missing "type" option');
@@ -78,26 +84,10 @@ class RouteConfigFactory
         }
 
         if (isset($spec['child_routes'])) {
-            $route = $this->createPartFromSpec($spec, $route);
+            $route = $this->createPartFromSpec($spec, $route, $prototypes);
         }
 
         return $route;
-    }
-
-    /**
-     * Returns defined prototype route
-     */
-    public function getPrototype(string $name) : ?RouteInterface
-    {
-        return $this->prototypes[$name] ?? null;
-    }
-
-    /**
-     * Defines prototype route to be re-used when creating routes from spec
-     */
-    public function addPrototype(string $name, RouteInterface $route) : void
-    {
-        $this->prototypes[$name] = $route;
     }
 
     /**
@@ -105,7 +95,7 @@ class RouteConfigFactory
      *
      * @throws InvalidArgumentException
      */
-    private function createChainFromSpec(array $specs) : RouteInterface
+    private function createChainFromSpec(array $specs, array $prototypes) : RouteInterface
     {
         if (! is_array($specs['chain_routes'])) {
             throw new InvalidArgumentException('Chain routes must be an array');
@@ -121,7 +111,7 @@ class RouteConfigFactory
 
         $chainRoutes = [];
         foreach ($chainRoutesSpec as $name => $routeSpec) {
-            $chainRoutes[$name] = $this->routeFromSpec($routeSpec);
+            $chainRoutes[$name] = $this->routeFromSpec($routeSpec, $prototypes);
         }
 
         $options = [
@@ -134,11 +124,11 @@ class RouteConfigFactory
     /**
      * Wraps route in spec with Part route and adds child_routes to Part
      */
-    private function createPartFromSpec(array $specs, RouteInterface $route) : RouteInterface
+    private function createPartFromSpec(array $specs, RouteInterface $route, array $prototypes) : RouteInterface
     {
         $childRoutes = [];
         foreach ($specs['child_routes'] as $name => $childSpec) {
-            $childRoutes[$name] = $this->routeFromSpec($childSpec);
+            $childRoutes[$name] = $this->routeFromSpec($childSpec, $prototypes);
         }
         $options = [
             'route'         => $route,
