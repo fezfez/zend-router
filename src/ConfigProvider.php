@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Zend\Router;
 
+use Zend\Router\Container\RouteConfigFactoryFactory;
 use Zend\Router\Container\RoutePluginManagerFactory;
 
 /**
@@ -46,6 +47,7 @@ class ConfigProvider
                 'RoutePluginManager' => RoutePluginManager::class,
             ],
             'factories' => [
+                RouteConfigFactory::class => RouteConfigFactoryFactory::class,
                 RoutePluginManager::class => RoutePluginManagerFactory::class,
             ],
         ];
