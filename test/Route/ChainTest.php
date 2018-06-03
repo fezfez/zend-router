@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace ZendTest\Router\Route;
 
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\ServerRequestInterface;
 use Zend\Diactoros\ServerRequest;
 use Zend\Diactoros\Uri;
 use Zend\Router\Exception\InvalidArgumentException;
@@ -269,5 +270,24 @@ class ChainTest extends TestCase
         foreach ($chained as $name => $route) {
             $this->assertStringMatchesFormat('__chained_route_no_name_%d', $name);
         }
+    }
+
+    public function testRejectsNegativePathOffset()
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Path offset cannot be negative');
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Chain(['foo' => new Literal('/')]);
+        $route->partialMatch($request->reveal(), -1);
+    }
+
+    public function testWithoutRoute()
+    {
+        $request = $this->prophesize(ServerRequestInterface::class);
+        $route = new Chain([]);
+        $result = $route->partialMatch($request->reveal(), 0);
+
+        $this->assertInstanceOf(PartialRouteResult::class, $result);
+        $this->assertFalse($result->isSuccess());
     }
 }

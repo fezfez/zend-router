@@ -533,6 +533,20 @@ class SegmentTest extends TestCase
         );
     }
 
+    public function testFactoryWithoutConstraints()
+    {
+        $tester = new FactoryTester($this);
+        $tester->testFactory(
+            Segment::class,
+            [
+                'route' => 'Missing "route" in options array',
+            ],
+            [
+                'route' => '/:foo[/:bar{-}]'
+            ]
+        );
+    }
+
     public function testRawDecode()
     {
         // verify all characters which don't absolutely require encoding pass through match unchanged
