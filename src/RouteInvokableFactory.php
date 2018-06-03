@@ -36,6 +36,10 @@ class RouteInvokableFactory implements AbstractFactoryInterface
      */
     public function canCreate(ContainerInterface $container, $routeName) : bool
     {
+        if (! is_string($routeName)) {
+            return false;
+        }
+
         if (! class_exists($routeName)) {
             return false;
         }
